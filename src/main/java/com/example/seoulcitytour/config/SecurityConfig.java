@@ -35,7 +35,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/guide/**").hasRole("GUIDE")
                 .requestMatchers("/api/dev/**").hasRole("DEV")
                 .requestMatchers("/api/record/**").hasAnyRole("ADMIN", "DEV")
-                .requestMatchers("/api/settlement/**").hasAnyRole("ADMIN", "DEV")  // ← 추가
+                .requestMatchers("/api/settlement/**").hasAnyRole("ADMIN", "DEV")
+                .requestMatchers("/api/ginseng/**").hasAnyRole("ADMIN", "DEV")
                 .anyRequest().authenticated()
             )
             .httpBasic(basic -> basic
