@@ -23,8 +23,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    // 인메모리 계정 삭제 → DB에서 읽어오는 CustomUserDetailsService 사용
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -36,15 +34,17 @@ public class SecurityConfig {
                 .requestMatchers("/api/sales/**").hasRole("SALES")
                 .requestMatchers("/api/guide/**").hasRole("GUIDE")
                 .requestMatchers("/api/dev/**").hasRole("DEV")
+                .requestMatchers("/api/record/**").hasAnyRole("ADMIN", "DEV")
+                .requestMatchers("/api/settlement/**").hasAnyRole("ADMIN", "DEV")  // ← 추가
                 .anyRequest().authenticated()
             )
-                .httpBasic(basic -> basic
-                        .authenticationEntryPoint((request, response, authException) -> {
-                            response.setStatus(401);
-                            response.setContentType("application/json;charset=UTF-8");
-                            response.getWriter().write("{\"error\": \"인증이 필요합니다.\"}");
-                        })
-                );
+            .httpBasic(basic -> basic
+                .authenticationEntryPoint((request, response, authException) -> {
+                    response.setStatus(401);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write("{\"error\": \"인증이 필요합니다.\"}");
+                })
+            );
 
         return http.build();
     }
