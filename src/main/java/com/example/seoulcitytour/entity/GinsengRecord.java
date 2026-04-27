@@ -18,11 +18,16 @@ public class GinsengRecord {
     private Long id;
 
     @Column(name = "guide_name", nullable = false)
-    private String guideName;   // 가이드 이름
+    private String guideName;
 
     @Column(nullable = false)
-    private LocalDate date;     // 날짜
+    private LocalDate date;
 
     @Column(nullable = false)
-    private Double count;       // 인삼 갯수 (소수점 가능)
+    private Double count;
+
+    // ── 핵심: 저장 시점의 단가를 같이 저장 ──
+    // 나중에 단가가 바뀌어도 이 기록의 정산금액은 변하지 않음
+    @Column(nullable = false)
+    private Long priceSnapshot;
 }

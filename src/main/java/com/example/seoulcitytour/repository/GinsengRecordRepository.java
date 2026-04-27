@@ -8,10 +8,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface GinsengRecordRepository extends JpaRepository<GinsengRecord, Long> {
-
-    // 특정 년월 전체 조회
     List<GinsengRecord> findByDateBetweenOrderByGuideNameAsc(LocalDate start, LocalDate end);
-
-    // 특정 가이드 + 날짜 (중복 방지)
     Optional<GinsengRecord> findByGuideNameAndDate(String guideName, LocalDate date);
 }
