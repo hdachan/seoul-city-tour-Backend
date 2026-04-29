@@ -37,6 +37,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/record/**").hasAnyRole("ADMIN", "DEV")
                 .requestMatchers("/api/settlement/**").hasAnyRole("ADMIN", "DEV")
                 .requestMatchers("/api/ginseng/**").hasAnyRole("ADMIN", "DEV")
+                .requestMatchers("/api/guide-form/**").hasAnyRole("GUIDE", "ADMIN", "DEV")
+                .requestMatchers("/api/guide-admin/**").hasAnyRole("ADMIN", "DEV")
                 .anyRequest().authenticated()
             )
             .httpBasic(basic -> basic
@@ -46,7 +48,6 @@ public class SecurityConfig {
                     response.getWriter().write("{\"error\": \"인증이 필요합니다.\"}");
                 })
             );
-
         return http.build();
     }
 
@@ -63,9 +64,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+    public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
