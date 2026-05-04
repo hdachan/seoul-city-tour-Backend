@@ -32,15 +32,42 @@ public class GuideFormAdminController {
     private final GuideMonthLockRepository lockRepository;
     private final TourNameRepository       tourNameRepository;
 
-    // ── 가이드 목록 ──
+    // ── 가이드 목록 (active=true만) ──
     @GetMapping("/guides")
     public ResponseEntity<?> getGuides() {
-        return ResponseEntity.ok(userRepository.findAll().stream()
+        return ResponseEntity.ok(userRepository.findByActiveTrueOrderByNameAsc().stream()
                 .filter(u -> "ROLE_GUIDE".equals(u.getRole()))
                 .map(u -> Map.of(
                         "username", u.getUsername(),
-                        "name", u.getName() != null ? u.getName() : u.getUsername()
+                        "name",     u.getName() != null ? u.getName() : u.getUsername()
                 )).toList());
+    }
+
+    // ── 월별 입력 현황 요약 (카드뷰 - active=true만) ──
+    @GetMapping("/summary")
+    public ResponseEntity<?> getSummary(@RequestParam Integer year, @RequestParam Integer month) {
+        var guides = userRepository.findByActiveTrueOrderByNameAsc().stream()
+                .filter(u -> "ROLE_GUIDE".equals(u.getRole()))
+                .toList();
+
+        var result = guides.stream().map(g -> {
+            int incomeCount   = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), year, month).size();
+            int expenseCount  = expenseRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), year, month).size();
+            int dailyFeeCount = dailyFeeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), year, month).size();
+            boolean locked    = lockRepository.findByGuideUsernameAndYearAndMonth(g.getUsername(), year, month)
+                    .map(GuideMonthLock::getLocked).orElse(false);
+            return Map.of(
+                    "username",      g.getUsername(),
+                    "name",          g.getName() != null ? g.getName() : g.getUsername(),
+                    "incomeCount",   incomeCount,
+                    "expenseCount",  expenseCount,
+                    "dailyFeeCount", dailyFeeCount,
+                    "hasData",       (incomeCount + expenseCount + dailyFeeCount) > 0,
+                    "locked",        locked
+            );
+        }).toList();
+
+        return ResponseEntity.ok(result);
     }
 
     // ── 잠금 상태 ──
@@ -62,6 +89,7 @@ public class GuideFormAdminController {
             Integer year          = (Integer) body.get("year");
             Integer month         = (Integer) body.get("month");
             Boolean locked        = (Boolean) body.get("locked");
+
             GuideMonthLock lock = lockRepository
                     .findByGuideUsernameAndYearAndMonth(guideUsername, year, month)
                     .orElse(new GuideMonthLock());
@@ -91,15 +119,15 @@ public class GuideFormAdminController {
         )).toList());
     }
 
-    // ── 수입 추가 (관리자) ──
+    // ── 수입 추가 ──
     @PostMapping("/income")
     public ResponseEntity<?> addIncome(@RequestBody Map<String, Object> body) {
         try {
-            String guideUsername = (String) body.get("guideUsername");
-            LocalDate date = LocalDate.now();
-            long amount    = parseL(body, "amount");
-            int headcount  = parseI(body, "headcount");
-            String payType = (String) body.get("paymentType");
+            String    guideUsername = (String) body.get("guideUsername");
+            LocalDate date          = LocalDate.now();
+            long      amount        = parseL(body, "amount");
+            int       headcount     = parseI(body, "headcount");
+            String    payType       = (String) body.get("paymentType");
 
             GuideIncome income = new GuideIncome();
             setField(income, "guideUsername",      guideUsername);
@@ -125,9 +153,9 @@ public class GuideFormAdminController {
     public ResponseEntity<?> updateIncome(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         try {
             GuideIncome income = incomeRepository.findById(id).orElseThrow();
-            long amount    = parseL(body, "amount");
-            int headcount  = parseI(body, "headcount");
-            String payType = (String) body.get("paymentType");
+            long   amount    = parseL(body, "amount");
+            int    headcount = parseI(body, "headcount");
+            String payType   = (String) body.get("paymentType");
             setField(income, "tourName",           (String) body.get("tourName"));
             setField(income, "representativeName", body.getOrDefault("representativeName", ""));
             setField(income, "paymentType",        payType);
@@ -166,14 +194,14 @@ public class GuideFormAdminController {
         )).toList());
     }
 
-    // ── 지출 추가 (관리자) ──
+    // ── 지출 추가 ──
     @PostMapping("/expense")
     public ResponseEntity<?> addExpense(@RequestBody Map<String, Object> body) {
         try {
-            String guideUsername = (String) body.get("guideUsername");
-            LocalDate date = LocalDate.now();
-            long amount    = parseL(body, "amount");
-            int headcount  = parseI(body, "headcount");
+            String    guideUsername = (String) body.get("guideUsername");
+            LocalDate date          = LocalDate.now();
+            long      amount        = parseL(body, "amount");
+            int       headcount     = parseI(body, "headcount");
 
             GuideExpense expense = new GuideExpense();
             setField(expense, "guideUsername", guideUsername);
@@ -227,12 +255,12 @@ public class GuideFormAdminController {
         )).toList());
     }
 
-    // ── 일비 추가 (관리자) ──
+    // ── 일비 추가 ──
     @PostMapping("/daily-fee")
     public ResponseEntity<?> addDailyFee(@RequestBody Map<String, Object> body) {
         try {
-            String guideUsername = (String) body.get("guideUsername");
-            LocalDate date = LocalDate.parse((String) body.get("date"));
+            String    guideUsername = (String) body.get("guideUsername");
+            LocalDate date          = LocalDate.parse((String) body.get("date"));
 
             GuideDailyFee fee = new GuideDailyFee();
             setField(fee, "guideUsername", guideUsername);
@@ -250,8 +278,8 @@ public class GuideFormAdminController {
     @PutMapping("/daily-fee/{id}")
     public ResponseEntity<?> updateDailyFee(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         try {
-            GuideDailyFee fee = dailyFeeRepository.findById(id).orElseThrow();
-            LocalDate date = LocalDate.parse((String) body.get("date"));
+            GuideDailyFee fee  = dailyFeeRepository.findById(id).orElseThrow();
+            LocalDate     date = LocalDate.parse((String) body.get("date"));
             setField(fee, "amount", parseL(body, "amount"));
             setField(fee, "date",   date);
             setField(fee, "year",   date.getYear());
@@ -281,34 +309,4 @@ public class GuideFormAdminController {
         field.setAccessible(true);
         field.set(obj, value);
     }
-
-    // ── 월별 입력 현황 요약 (카드뷰용) ──
-    @GetMapping("/summary")
-    public ResponseEntity<?> getSummary(@RequestParam Integer year, @RequestParam Integer month) {
-        var guides = userRepository.findAll().stream()
-                .filter(u -> "ROLE_GUIDE".equals(u.getRole()))
-                .toList();
-
-        var result = guides.stream().map(g -> {
-            int incomeCount   = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), year, month).size();
-            int expenseCount  = expenseRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), year, month).size();
-            int dailyFeeCount = dailyFeeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), year, month).size();
-            boolean locked    = lockRepository.findByGuideUsernameAndYearAndMonth(g.getUsername(), year, month)
-                    .map(GuideMonthLock::getLocked).orElse(false);
-            return Map.of(
-                    "username",      g.getUsername(),
-                    "name",          g.getName() != null ? g.getName() : g.getUsername(),
-                    "incomeCount",   incomeCount,
-                    "expenseCount",  expenseCount,
-                    "dailyFeeCount", dailyFeeCount,
-                    "hasData",       (incomeCount + expenseCount + dailyFeeCount) > 0,
-                    "locked",        locked
-            );
-        }).toList();
-
-        return ResponseEntity.ok(result);
-    }
-
-
-
 }

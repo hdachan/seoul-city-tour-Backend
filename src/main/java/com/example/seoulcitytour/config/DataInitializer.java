@@ -19,34 +19,26 @@ public class DataInitializer implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        // 이미 데이터 있으면 추가 안 함
         if (userRepository.count() > 0) return;
 
-        // 테스트 계정 4개 자동 생성
-        createUser("admin", "1234", "ROLE_ADMIN");
-        createUser("sales", "1234", "ROLE_SALES");
-        createUser("guide", "1234", "ROLE_GUIDE");
-        createUser("dev",   "1234", "ROLE_DEV");
+        createUser("admin", "1234", "ROLE_ADMIN", "관리자");
+        createUser("sales", "1234", "ROLE_SALES", "영업담당자");
+        createUser("guide", "1234", "ROLE_GUIDE", "가이드");
+        createUser("dev",   "1234", "ROLE_DEV",   "개발자");
 
         System.out.println("✅ 테스트 계정 4개 생성 완료!");
     }
 
-    private void createUser(String username, String password, String role) {
-        // User 엔티티는 Lombok @NoArgsConstructor + 직접 INSERT
-        userRepository.save(createUserEntity(username, password, role));
-    }
-
-    private User createUserEntity(String username, String rawPassword, String role) {
+    private void createUser(String username, String password, String role, String name) {
         try {
             User user = new User();
-            // Reflection으로 필드 설정 (setter 없는 경우)
             setField(user, "username", username);
-            setField(user, "password", passwordEncoder.encode(rawPassword));
-            setField(user, "role", role);
-            return user;
-        } catch (Exception e) {
-            throw new RuntimeException("유저 생성 실패", e);
-        }
+            setField(user, "password", passwordEncoder.encode(password));
+            setField(user, "role",     role);
+            setField(user, "name",     name);
+            setField(user, "active",   true);
+            userRepository.save(user);
+        } catch (Exception e) { throw new RuntimeException("계정 생성 실패", e); }
     }
 
     private void setField(Object obj, String fieldName, Object value) throws Exception {

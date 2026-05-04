@@ -18,11 +18,14 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        // DB에서 유저 조회
         var user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("유저를 찾을 수 없습니다: " + username));
 
-        // Spring Security가 사용하는 형태로 변환
+        // 비활성(삭제된) 계정은 로그인 불가
+        if (!user.getActive()) {
+            throw new UsernameNotFoundException("비활성화된 계정입니다: " + username);
+        }
+
         return new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
                 user.getPassword(),

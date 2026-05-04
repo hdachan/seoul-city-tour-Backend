@@ -23,6 +23,9 @@ public class User {
     @Column(nullable = false)
     private String role;
 
-    @Column(nullable = true)
-    private String name;  // 이름 추가
+    @Column
+    private String name;
+
+    @Column(nullable = false)
+    private Boolean active = true;  // true = 활성, false = 삭제(비활성)
 }
