@@ -5,8 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "platform_settlement",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"platform_id", "year", "month", "region"}))
+@Table(name = "platform_settlement")
 @Getter
 @NoArgsConstructor
 public class PlatformSettlement {
@@ -25,12 +24,9 @@ public class PlatformSettlement {
     @Column(nullable = false)
     private Integer month;
 
-    @Column(nullable = false)
+    @Column
     private Long amount;
 
-    @Column(nullable = false)
-    private String region;  // "국내" or "해외"
-
     @Column
-    private String memo;    // 비고
+    private String memo;
 }

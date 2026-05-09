@@ -15,8 +15,14 @@ public class Platform {
     private Long id;
 
     @Column(nullable = false, unique = true)
-    private String name;  // viator, klook, get your guide
+    private String name;
+
+    @Column
+    private String region;   // 국내 / 해외
+
+    @Column
+    private String memo;     // 기본 비고 (매월 불러옴)
 
     @Column(nullable = false)
-    private Boolean active = true;  // 활성/비활성
+    private Boolean active = true;
 }
