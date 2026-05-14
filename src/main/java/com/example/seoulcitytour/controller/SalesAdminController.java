@@ -18,7 +18,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/sales-admin")
-@PreAuthorize("hasAnyRole('ADMIN', 'DEV')")
+@PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales-admin')")
 @RequiredArgsConstructor
 public class SalesAdminController {
 

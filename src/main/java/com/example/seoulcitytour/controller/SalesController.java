@@ -9,7 +9,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/sales")
-@PreAuthorize("hasRole('SALES')")
+@PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
 public class SalesController {
 
     @GetMapping("/customers")

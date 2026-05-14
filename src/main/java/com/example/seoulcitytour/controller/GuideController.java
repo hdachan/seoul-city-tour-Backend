@@ -9,7 +9,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/guide")
-@PreAuthorize("hasRole('GUIDE')")
+@PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
 public class GuideController {
 
     @GetMapping("/content")

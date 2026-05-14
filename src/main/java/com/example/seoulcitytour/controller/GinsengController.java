@@ -18,7 +18,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/ginseng")
-@PreAuthorize("hasAnyRole('ADMIN', 'DEV')")
+@PreAuthorize("@tabPermissionService.hasAccess(authentication, 'ginseng')")
 @RequiredArgsConstructor
 public class GinsengController {
 
@@ -74,16 +74,20 @@ public class GinsengController {
             String name = body.get("name");
             if (name == null || name.isBlank())
                 return ResponseEntity.badRequest().body(Map.of("error", "이름을 입력해주세요."));
+
+            // 중복 체크
+            if (guideRepository.existsByName(name.trim()))
+                return ResponseEntity.badRequest().body(Map.of("error", "이미 존재하는 가이드 이름입니다."));
+
             GinsengGuide guide = new GinsengGuide();
             setField(guide, "name",   name.trim());
             setField(guide, "active", true);
             guideRepository.save(guide);
-            return ResponseEntity.ok(Map.of("message", "가이드가 추가되었습니다."));
+            return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage()));
         }
     }
-
     // ── 가이드 활성/비활성 토글 ──
     @PostMapping("/guides/{id}/toggle")
     public ResponseEntity<?> toggleGuide(@PathVariable Long id) {

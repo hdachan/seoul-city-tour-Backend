@@ -40,7 +40,8 @@ public class GuideFormController {
 
     // ── 투어이름 ──
     @GetMapping("/tour-names")
-    @PreAuthorize("hasAnyRole('GUIDE', 'ADMIN', 'DEV')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form') " +
+            "or @tabPermissionService.hasAccess(authentication, 'guide-admin')")
     public ResponseEntity<?> getTourNames() {
         return ResponseEntity.ok(tourNameRepository.findByActiveTrueOrderByNameAsc()
                 .stream().map(t -> Map.of("id", t.getId(), "name", t.getName())).toList());
@@ -71,14 +72,14 @@ public class GuideFormController {
 
     // ── 잠금 상태 ──
     @GetMapping("/lock-status")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> getLockStatus(Authentication auth) {
         return ResponseEntity.ok(Map.of("locked", isMonthLocked(auth.getName())));
     }
 
     // ── 수입 조회 ──
     @GetMapping("/records")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> getRecords(Authentication auth) {
         LocalDate now = LocalDate.now();
         var list = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(
@@ -96,7 +97,7 @@ public class GuideFormController {
 
     // ── 수입 추가 ──
     @PostMapping("/records")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> addRecord(@RequestBody Map<String, Object> body, Authentication auth) {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
@@ -127,7 +128,7 @@ public class GuideFormController {
 
     // ── 수입 수정 ──
     @PutMapping("/records/{id}")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> updateRecord(@PathVariable Long id,
                                           @RequestBody Map<String, Object> body,
                                           Authentication auth) {
@@ -161,7 +162,7 @@ public class GuideFormController {
 
     // ── 수입 삭제 ──
     @DeleteMapping("/records/{id}")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> deleteRecord(@PathVariable Long id, Authentication auth) {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
@@ -176,7 +177,7 @@ public class GuideFormController {
 
     // ── 지출 조회 ──
     @GetMapping("/expense")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> getExpense(Authentication auth) {
         LocalDate now = LocalDate.now();
         var list = expenseRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(
@@ -194,7 +195,7 @@ public class GuideFormController {
 
     // ── 지출 추가 ──
     @PostMapping("/expense")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> addExpense(@RequestBody Map<String, Object> body, Authentication auth) {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
@@ -221,7 +222,7 @@ public class GuideFormController {
 
     // ── 지출 수정 ──
     @PutMapping("/expense/{id}")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> updateExpense(@PathVariable Long id,
                                            @RequestBody Map<String, Object> body,
                                            Authentication auth) {
@@ -246,7 +247,7 @@ public class GuideFormController {
 
     // ── 지출 삭제 ──
     @DeleteMapping("/expense/{id}")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> deleteExpense(@PathVariable Long id, Authentication auth) {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
@@ -261,7 +262,7 @@ public class GuideFormController {
 
     // ── 일비 조회 ──
     @GetMapping("/daily-fee")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> getDailyFee(Authentication auth) {
         LocalDate now = LocalDate.now();
         var list = dailyFeeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(
@@ -275,7 +276,7 @@ public class GuideFormController {
 
     // ── 일비 추가 ──
     @PostMapping("/daily-fee")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> addDailyFee(@RequestBody Map<String, Object> body, Authentication auth) {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
@@ -295,7 +296,7 @@ public class GuideFormController {
 
     // ── 일비 수정 ──
     @PutMapping("/daily-fee/{id}")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> updateDailyFee(@PathVariable Long id,
                                             @RequestBody Map<String, Object> body,
                                             Authentication auth) {
@@ -317,7 +318,7 @@ public class GuideFormController {
 
     // ── 일비 삭제 ──
     @DeleteMapping("/daily-fee/{id}")
-    @PreAuthorize("hasRole('GUIDE')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> deleteDailyFee(@PathVariable Long id, Authentication auth) {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));

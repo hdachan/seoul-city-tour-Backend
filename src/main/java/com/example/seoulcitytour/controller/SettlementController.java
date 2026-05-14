@@ -14,7 +14,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/settlement")
-@PreAuthorize("hasAnyRole('ADMIN', 'DEV')")
+@PreAuthorize("@tabPermissionService.hasAccess(authentication, 'settlement')")
 @RequiredArgsConstructor
 public class SettlementController {
 

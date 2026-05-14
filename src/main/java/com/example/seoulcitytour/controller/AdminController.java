@@ -14,7 +14,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'DEV')")
 @RequiredArgsConstructor
 public class AdminController {
 
@@ -22,7 +22,6 @@ public class AdminController {
     private final UserService     userService;
     private final PasswordEncoder passwordEncoder;
 
-    // ── 계정 목록 (active=true만) ──
     @GetMapping("/users")
     public ResponseEntity<?> getUsers() {
         return ResponseEntity.ok(userService.getManagedUsers().stream().map(u -> Map.of(
@@ -33,48 +32,39 @@ public class AdminController {
         )).toList());
     }
 
-    // ── 계정 생성 ──
     @PostMapping("/users/create")
     public ResponseEntity<?> createUser(@RequestBody Map<String, Object> body) {
         try {
-            String username = (String) body.get("username");
-            String password = (String) body.get("password");
-            String role     = (String) body.get("role");
-            String name     = (String) body.getOrDefault("name", "");
-            userService.createUser(username, password, role, name);
+            userService.createUser(
+                    (String) body.get("username"),
+                    (String) body.get("password"),
+                    (String) body.get("role"),
+                    (String) body.getOrDefault("name", "")
+            );
             return ResponseEntity.ok(Map.of("message", "계정이 생성되었습니다."));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
-    // ── 계정 수정 (이름 / 역할 / 비밀번호) ──
     @PutMapping("/users/{id}")
-    public ResponseEntity<?> updateUser(@PathVariable Long id,
-                                        @RequestBody Map<String, Object> body) {
+    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         try {
-            User user = userRepository.findById(id)
-                    .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 계정입니다."));
-
-            String name = (String) body.get("name");
-            String role = (String) body.get("role");
+            User user = userRepository.findById(id).orElseThrow();
+            String name        = (String) body.get("name");
+            String role        = (String) body.get("role");
             String newPassword = (String) body.get("newPassword");
-
-            if (name     != null) setField(user, "name", name);
-            if (role     != null) setField(user, "role", role);
+            if (name        != null) setField(user, "name", name);
+            if (role        != null) setField(user, "role", role);
             if (newPassword != null && !newPassword.isBlank())
                 setField(user, "password", passwordEncoder.encode(newPassword));
-
             userRepository.save(user);
             return ResponseEntity.ok(Map.of("message", "수정되었습니다."));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", "수정 실패: " + e.getMessage()));
         }
     }
 
-    // ── 계정 삭제 (소프트) ──
     @DeleteMapping("/users/{id}")
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         try {

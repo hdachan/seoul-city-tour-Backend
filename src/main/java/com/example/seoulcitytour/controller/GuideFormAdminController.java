@@ -21,7 +21,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/guide-admin")
-@PreAuthorize("hasAnyRole('ADMIN', 'DEV')")
+@PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-admin')")
 @RequiredArgsConstructor
 public class GuideFormAdminController {
 
@@ -41,6 +41,14 @@ public class GuideFormAdminController {
                         "username", u.getUsername(),
                         "name",     u.getName() != null ? u.getName() : u.getUsername()
                 )).toList());
+    }
+
+    // ── 투어이름 목록 (guide-admin 에서도 접근 가능) ──
+    @GetMapping("/tour-names")
+    public ResponseEntity<?> getTourNames() {
+        return ResponseEntity.ok(tourNameRepository.findByActiveTrueOrderByNameAsc().stream()
+                .map(t -> Map.of("id", t.getId(), "name", t.getName()))
+                .toList());
     }
 
     // ── 월별 입력 현황 요약 (카드뷰 - active=true만) ──

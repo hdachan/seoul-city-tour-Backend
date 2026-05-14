@@ -15,7 +15,7 @@ import java.util.*;
 
 @RestController
 @RequestMapping("/api/record")
-@PreAuthorize("hasAnyRole('ADMIN', 'DEV')")
+@PreAuthorize("@tabPermissionService.hasAccess(authentication, 'record')")
 @RequiredArgsConstructor
 public class RecordController {
 

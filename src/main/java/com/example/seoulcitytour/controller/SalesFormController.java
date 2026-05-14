@@ -40,7 +40,7 @@ public class SalesFormController {
 
     // ── 잠금 상태 ──
     @GetMapping("/lock-status")
-    @PreAuthorize("hasRole('SALES')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> getLockStatus(Authentication auth) {
         return ResponseEntity.ok(Map.of("locked", isMonthLocked(auth.getName())));
     }
@@ -50,7 +50,7 @@ public class SalesFormController {
     // ─────────────────────────────────────
 
     @GetMapping("/receipt")
-    @PreAuthorize("hasRole('SALES')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> getReceipts(Authentication auth) {
         LocalDate now = LocalDate.now();
         var list = receiptRepository.findBySalesUsernameAndYearAndMonthOrderByDateAsc(
@@ -67,7 +67,7 @@ public class SalesFormController {
     }
 
     @PostMapping("/receipt")
-    @PreAuthorize("hasRole('SALES')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> addReceipt(@RequestBody Map<String, Object> body, Authentication auth) {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 잠겨있습니다."));
@@ -93,7 +93,7 @@ public class SalesFormController {
     }
 
     @PutMapping("/receipt/{id}")
-    @PreAuthorize("hasRole('SALES')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> updateReceipt(@PathVariable Long id,
                                            @RequestBody Map<String, Object> body,
                                            Authentication auth) {
@@ -118,7 +118,7 @@ public class SalesFormController {
     }
 
     @DeleteMapping("/receipt/{id}")
-    @PreAuthorize("hasRole('SALES')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> deleteReceipt(@PathVariable Long id, Authentication auth) {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 잠겨있습니다."));
@@ -136,7 +136,7 @@ public class SalesFormController {
     // ─────────────────────────────────────
 
     @GetMapping("/driving")
-    @PreAuthorize("hasRole('SALES')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> getDriving(Authentication auth) {
         LocalDate now = LocalDate.now();
         var list = drivingRepository.findBySalesUsernameAndYearAndMonthOrderByIdAsc(
@@ -151,7 +151,7 @@ public class SalesFormController {
     }
 
     @PostMapping("/driving")
-    @PreAuthorize("hasRole('SALES')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> addDriving(@RequestBody Map<String, Object> body, Authentication auth) {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 잠겨있습니다."));
@@ -176,7 +176,7 @@ public class SalesFormController {
     }
 
     @PutMapping("/driving/{id}")
-    @PreAuthorize("hasRole('SALES')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> updateDriving(@PathVariable Long id,
                                            @RequestBody Map<String, Object> body,
                                            Authentication auth) {
@@ -200,7 +200,7 @@ public class SalesFormController {
     }
 
     @DeleteMapping("/driving/{id}")
-    @PreAuthorize("hasRole('SALES')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> deleteDriving(@PathVariable Long id, Authentication auth) {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 잠겨있습니다."));
