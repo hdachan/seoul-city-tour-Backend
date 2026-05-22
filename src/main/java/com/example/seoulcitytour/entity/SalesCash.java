@@ -7,10 +7,10 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "sales_receipt")
+@Table(name = "sales_cash")
 @Getter
 @NoArgsConstructor
-public class SalesReceipt {
+public class SalesCash {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,22 +22,28 @@ public class SalesReceipt {
     @Column(nullable = false)
     private LocalDate date;
 
+    // "수입" or "지출"
+    @Column(nullable = false)
+    private String type;
+
+    // 수입일 때만: "카드" / "현금" / "기타"
+    @Column
+    private String paymentType;
+
     @Column
     private String category;
 
-    // 카테고리 단위 스냅샷 ("원" or "L") - 저장 시점 단위 보존
+    // 카테고리 단위 스냅샷 ("원" or "L")
     @Column
     private String unit = "원";
 
     @Column
     private String content;
 
-    // unit="원" 일 때: 총금액(원)
-    // unit="L"  일 때: 주유량(L)
+    // unit="L" 일 때 주유량
     @Column
     private Double amount;
 
-    // unit="원" 일 때만 계산, "L"이면 null
     @Column
     private Long totalAmount;
 
@@ -46,9 +52,6 @@ public class SalesReceipt {
 
     @Column
     private Long vat;
-
-    @Column
-    private String businessNumber;
 
     @Column
     private String companyName;
