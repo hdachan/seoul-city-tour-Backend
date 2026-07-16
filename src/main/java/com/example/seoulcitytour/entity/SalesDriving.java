@@ -19,20 +19,45 @@ public class SalesDriving {
     @Column(nullable = false)
     private String salesUsername;
 
-    @Column
-    private String drivingMonth;     // 자동 세팅 (예: "5월")
+    @Column(nullable = false)
+    private LocalDate date;
 
-    @Column
-    private LocalDate date;          // 날짜 (이번 달만)
+    // "업무" / "주유" / "휴가"
+    @Column(nullable = false)
+    private String type = "업무";
 
+    // 도착지
     @Column
-    private String totalFuelDetail;  // 총주유내역
+    private String destination;
 
+    // 도착 시간 (예: "09:40")
     @Column
-    private Double averageDistance;  // 평균거리 (km)
+    private String arrivalTime;
 
+    // 미터기값 (오늘 계량기 숫자)
+    // 운행거리는 프론트에서 미터기 기준으로 계산
     @Column
-    private Long totalFuelCost;      // 총주유금액
+    private Integer meterReading;
+
+    // 용무 (자유입력)
+    @Column
+    private String purpose;
+
+    // 주유량 (L) - 주유시만
+    @Column
+    private Double fuelAmount;
+
+    // 주유금액 (원) - 주유시만
+    @Column
+    private Long fuelCost;
+
+    // 단가 (원/L) - 주유시만
+    @Column
+    private Integer fuelUnitPrice;
+
+    // 비고
+    @Column
+    private String note;
 
     @Column(nullable = false)
     private Integer year;

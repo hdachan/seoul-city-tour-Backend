@@ -26,6 +26,10 @@ public class User {
     @Column
     private String name;
 
+    // 법인카드 번호
+    @Column
+    private String cardNumber;
+
     @Column(nullable = false)
-    private Boolean active = true;  // true = 활성, false = 삭제(비활성)
+    private Boolean active = true;
 }

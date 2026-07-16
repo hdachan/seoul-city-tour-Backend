@@ -18,19 +18,23 @@ public class TabPermissionService {
     public boolean hasAccess(Authentication authentication, String tabId) {
         if (authentication == null || !authentication.isAuthenticated()) return false;
 
-        // 현재 사용자의 역할 추출
         String role = authentication.getAuthorities().stream()
                 .map(a -> a.getAuthority())
                 .filter(a -> a.startsWith("ROLE_"))
                 .findFirst()
                 .orElse("");
 
-        if (role.isEmpty()) return false;
+        // ← 이거 추가
+        System.out.println(">>> hasAccess: role=[" + role + "], tabId=[" + tabId + "]");
 
-        // ADMIN, DEV 는 항상 허용
+        if (role.isEmpty()) return false;
         if ("ROLE_ADMIN".equals(role) || "ROLE_DEV".equals(role)) return true;
 
-        // 그 외는 tab_permission 테이블에서 확인
-        return tabPermissionRepository.existsByRoleKeyAndTabId(role, tabId);
+        boolean result = tabPermissionRepository.existsByRoleKeyAndTabId(role, tabId);
+
+        // ← 이거 추가
+        System.out.println(">>> result=[" + result + "]");
+
+        return result;
     }
 }
