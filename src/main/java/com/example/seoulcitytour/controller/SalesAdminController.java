@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.lang.reflect.Field;
 import java.time.LocalDate;
+import com.example.seoulcitytour.scheduler.SalesWeekLockScheduler;
 import java.time.YearMonth;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -46,30 +47,97 @@ public class SalesAdminController {
         var users = userRepository.findByActiveTrueOrderByNameAsc().stream()
                 .filter(u -> "ROLE_SALES".equals(u.getRole())).toList();
         return ResponseEntity.ok(users.stream().map(u -> {
+            var driving = drivingRepository.findBySalesUsernameAndYearAndMonthOrderByDateAscIdAsc(u.getUsername(), year, month);
             int receiptCount = receiptRepository.findBySalesUsernameAndYearAndMonthOrderByDateAsc(u.getUsername(), year, month).size();
-            int drivingCount = drivingRepository.findBySalesUsernameAndYearAndMonthOrderByDateAscIdAsc(u.getUsername(), year, month).size();
-            boolean locked   = lockRepository.findBySalesUsernameAndYearAndMonth(u.getUsername(), year, month)
-                    .map(SalesMonthLock::getLocked).orElse(false);
-            return Map.of(
-                    "username",     u.getUsername(),
-                    "name",         u.getName() != null ? u.getName() : u.getUsername(),
-                    "receiptCount", receiptCount,
-                    "drivingCount", drivingCount,
-                    "hasData",      (receiptCount + drivingCount) > 0,
-                    "locked",       locked
-            );
+            int drivingCount = driving.size();
+            boolean locked = false;
+
+            // 미터기 기반 운행거리 계산
+            var sorted = driving.stream()
+                    .filter(d -> d.getMeterReading() != null && d.getMeterReading() > 0)
+                    .sorted(java.util.Comparator.comparing(com.example.seoulcitytour.entity.SalesDriving::getDate)
+                            .thenComparing(d -> d.getArrivalTime() != null ? d.getArrivalTime() : ""))
+                    .toList();
+            long totalDist = 0; int lastMeter = 0;
+            for (var d : sorted) {
+                int m = d.getMeterReading();
+                if (lastMeter > 0 && m > lastMeter) totalDist += (m - lastMeter);
+                lastMeter = m;
+            }
+            double totalFuelL = driving.stream().mapToDouble(d -> d.getFuelAmount() != null ? d.getFuelAmount() : 0).sum();
+            long   totalFuelC = driving.stream().mapToLong(d -> d.getFuelCost() != null ? d.getFuelCost() : 0).sum();
+            String avgKmL = totalFuelL > 0 ? String.format("%.1f", totalDist / totalFuelL) : "-";
+
+            var m = new java.util.LinkedHashMap<String, Object>();
+            m.put("username",     u.getUsername());
+            m.put("name",         u.getName() != null ? u.getName() : u.getUsername());
+            m.put("cardNumber",   u.getCardNumber() != null ? u.getCardNumber() : "");
+            m.put("receiptCount", receiptCount);
+            m.put("drivingCount", drivingCount);
+            m.put("hasData",      (receiptCount + drivingCount) > 0);
+            m.put("locked",       locked);
+            m.put("totalDist",    totalDist);
+            m.put("totalFuelL",   totalFuelL);
+            m.put("totalFuelC",   totalFuelC);
+            m.put("avgKmL",       avgKmL);
+            // 주 단위 잠금 상태
+            var wLocks = new java.util.LinkedHashMap<Integer, Boolean>();
+            var weeks2 = com.example.seoulcitytour.scheduler.SalesWeekLockScheduler.getWeeksOfMonth(year, month);
+            int currentWeekNum2 = com.example.seoulcitytour.scheduler.SalesWeekLockScheduler.getCurrentWeekNum(year, month);
+            var userLocks = lockRepository.findBySalesUsernameAndYearAndMonth(u.getUsername(), year, month);
+            for (var w : weeks2) {
+                var wRecord = userLocks.stream().filter(l -> l.getWeekNum() == w.weekNum()).findFirst();
+                boolean wLocked;
+                if (wRecord.isPresent()) {
+                    wLocked = wRecord.get().getLocked();
+                } else {
+                    wLocked = (w.weekNum() != currentWeekNum2);
+                }
+                wLocks.put(w.weekNum(), wLocked);
+            }
+            m.put("weekLocks", wLocks);
+            // 입력된 날짜 목록 (distinct date 기준)
+            var enteredDates = driving.stream()
+                    .map(d -> d.getDate().toString())
+                    .distinct()
+                    .sorted()
+                    .toList();
+            m.put("enteredDates", enteredDates);
+            m.put("enteredDays",  (long) enteredDates.size());
+            return m;
         }).toList());
     }
 
+    // 월 전체 잠금 상태 조회
     @GetMapping("/lock-status")
     public ResponseEntity<?> getLockStatus(@RequestParam String salesUsername,
                                            @RequestParam Integer year,
                                            @RequestParam Integer month) {
-        boolean locked = lockRepository.findBySalesUsernameAndYearAndMonth(salesUsername, year, month)
+        var allLocks = lockRepository.findBySalesUsernameAndYearAndMonth(salesUsername, year, month);
+        boolean monthLocked = allLocks.stream().filter(l -> l.getWeekNum() == 0).findFirst()
                 .map(SalesMonthLock::getLocked).orElse(false);
-        return ResponseEntity.ok(Map.of("locked", locked));
+
+        // 이번 주 번호
+        int currentWeekNum = SalesWeekLockScheduler.getCurrentWeekNum(year, month);
+
+        var weekLocks = new java.util.LinkedHashMap<Integer, Boolean>();
+        var weeks = SalesWeekLockScheduler.getWeeksOfMonth(year, month);
+        for (var w : weeks) {
+            var record = allLocks.stream().filter(l -> l.getWeekNum() == w.weekNum()).findFirst();
+            boolean wLocked;
+            if (record.isPresent()) {
+                // DB에 레코드 있으면 DB 값 사용
+                wLocked = record.get().getLocked();
+            } else {
+                // DB에 레코드 없으면: 이번 주=열림, 나머지=잠김
+                wLocked = (w.weekNum() != currentWeekNum);
+            }
+            weekLocks.put(w.weekNum(), wLocked);
+        }
+        return ResponseEntity.ok(Map.of("locked", monthLocked, "weekLocks", weekLocks));
     }
 
+    // 월 전체 잠금 토글
     @PostMapping("/lock")
     public ResponseEntity<?> toggleLock(@RequestBody Map<String, Object> body) {
         try {
@@ -77,14 +145,18 @@ public class SalesAdminController {
             Integer year          = (Integer) body.get("year");
             Integer month         = (Integer) body.get("month");
             Boolean locked        = (Boolean) body.get("locked");
-            SalesMonthLock lock = lockRepository.findBySalesUsernameAndYearAndMonth(salesUsername, year, month)
+            Integer weekNum       = body.get("weekNum") != null ? (Integer) body.get("weekNum") : 0;
+
+            SalesMonthLock lock = lockRepository
+                    .findBySalesUsernameAndYearAndMonthAndWeekNum(salesUsername, year, month, weekNum)
                     .orElse(new SalesMonthLock());
             setField(lock, "salesUsername", salesUsername);
-            setField(lock, "year", year);
-            setField(lock, "month", month);
-            setField(lock, "locked", locked);
+            setField(lock, "year",    year);
+            setField(lock, "month",   month);
+            setField(lock, "weekNum", weekNum);
+            setField(lock, "locked",  locked);
             lockRepository.save(lock);
-            return ResponseEntity.ok(Map.of("locked", locked));
+            return ResponseEntity.ok(Map.of("locked", locked, "weekNum", weekNum));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 

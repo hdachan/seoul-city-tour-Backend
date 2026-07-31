@@ -6,7 +6,7 @@ import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "sales_month_lock",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"sales_username", "year", "month"}))
+        uniqueConstraints = @UniqueConstraint(columnNames = {"sales_username", "year", "month", "week_num"}))
 @Getter
 @NoArgsConstructor
 public class SalesMonthLock {
@@ -23,6 +23,10 @@ public class SalesMonthLock {
 
     @Column(nullable = false)
     private Integer month;
+
+    // 0 = 월 전체 잠금, 1~5 = 주 단위 잠금
+    @Column(name = "week_num", nullable = false)
+    private Integer weekNum = 0;
 
     @Column(nullable = false)
     private Boolean locked = false;

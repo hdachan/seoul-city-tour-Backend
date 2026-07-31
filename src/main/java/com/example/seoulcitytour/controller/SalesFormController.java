@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.lang.reflect.Field;
 import java.time.LocalDate;
+import com.example.seoulcitytour.scheduler.SalesWeekLockScheduler;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -39,9 +40,48 @@ public class SalesFormController {
     private long calcSupplyAmount(long total) { return Math.round(total / 1.1); }
     private long calcVat(long total)          { return total - calcSupplyAmount(total); }
 
-    private boolean isMonthLocked(String username, int year, int month) {
-        return lockRepository.findBySalesUsernameAndYearAndMonth(username, year, month)
+    private boolean isLocked(String username, LocalDate date) {
+        int year  = date.getYear();
+        int month = date.getMonthValue();
+
+        // DB weekLocks 기준으로만 체크 (스케줄러가 이번주=false, 지난주=true 관리)
+        var allLocks = lockRepository.findBySalesUsernameAndYearAndMonth(username, year, month);
+
+        // 월 전체 잠금 체크
+        boolean monthLocked = allLocks.stream()
+                .filter(l -> l.getWeekNum() == 0).findFirst()
                 .map(SalesMonthLock::getLocked).orElse(false);
+        if (monthLocked) return true;
+
+        // 해당 날짜의 주 잠금 체크
+        var weeks = SalesWeekLockScheduler.getWeeksOfMonth(year, month);
+        for (var week : weeks) {
+            if (!date.isBefore(week.start()) && !date.isAfter(week.end())) {
+                // DB에 레코드 없으면 잠금 (스케줄러가 아직 실행 안 된 경우)
+                return allLocks.stream()
+                        .filter(l -> l.getWeekNum() == week.weekNum()).findFirst()
+                        .map(SalesMonthLock::getLocked).orElse(true);
+            }
+        }
+        return true;
+    }
+
+    // lock-status API (프론트용)
+    private java.util.Map<String, Object> getLockInfo(String username, int year, int month) {
+        var allLocks = lockRepository.findBySalesUsernameAndYearAndMonth(username, year, month);
+        boolean monthLocked = allLocks.stream().filter(l -> l.getWeekNum() == 0).findFirst()
+                .map(SalesMonthLock::getLocked).orElse(false);
+        int currentWeekNum = SalesWeekLockScheduler.getCurrentWeekNum(year, month);
+        var weekLocks = new java.util.LinkedHashMap<Integer, Boolean>();
+        var weeks = SalesWeekLockScheduler.getWeeksOfMonth(year, month);
+        for (var w : weeks) {
+            var record = allLocks.stream().filter(l -> l.getWeekNum() == w.weekNum()).findFirst();
+            boolean wLocked = record.isPresent()
+                    ? record.get().getLocked()
+                    : (w.weekNum() != currentWeekNum); // DB 없으면 이번주=열림, 나머지=잠김
+            weekLocks.put(w.weekNum(), wLocked);
+        }
+        return Map.of("locked", monthLocked, "weekLocks", weekLocks);
     }
 
     // ── 잠금 상태 ──
@@ -50,7 +90,7 @@ public class SalesFormController {
     public ResponseEntity<?> getLockStatus(@RequestParam Integer year,
                                            @RequestParam Integer month,
                                            Authentication auth) {
-        return ResponseEntity.ok(Map.of("locked", isMonthLocked(auth.getName(), year, month)));
+        return ResponseEntity.ok(getLockInfo(auth.getName(), year, month));
     }
 
     // ── 카테고리 ──
@@ -98,7 +138,7 @@ public class SalesFormController {
 
             if (date.isBefore(LocalDate.now()))
                 return ResponseEntity.badRequest().body(Map.of("error", "이전 날짜의 비고는 수정할 수 없습니다."));
-            if (isMonthLocked(auth.getName(), date.getYear(), date.getMonthValue()))
+            if (isLocked(auth.getName(), date))
                 return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
 
             SalesDailyNote n = dailyNoteRepository
@@ -176,7 +216,7 @@ public class SalesFormController {
             }
 
             for (LocalDate date : dates) {
-                if (isMonthLocked(auth.getName(), date.getYear(), date.getMonthValue()))
+                if (isLocked(auth.getName(), date))
                     continue; // 잠긴 달은 건너뜀
                 SalesDriving d = new SalesDriving();
                 saveDriving(d, body, auth.getName(), date);
@@ -201,7 +241,7 @@ public class SalesFormController {
             LocalDate date = LocalDate.parse((String) body.getOrDefault("startDate",
                     body.getOrDefault("date", d.getDate().toString())));
 
-            if (isMonthLocked(auth.getName(), date.getYear(), date.getMonthValue()))
+            if (isLocked(auth.getName(), date))
                 return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
 
             saveDriving(d, body, auth.getName(), date);
@@ -217,7 +257,7 @@ public class SalesFormController {
             SalesDriving d = drivingRepository.findById(id).orElseThrow();
             if (!d.getSalesUsername().equals(auth.getName()))
                 return ResponseEntity.status(403).body(Map.of("error", "권한 없음"));
-            if (isMonthLocked(auth.getName(), d.getYear(), d.getMonth()))
+            if (isLocked(auth.getName(), d.getDate()))
                 return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
             drivingRepository.deleteById(id);
             return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
@@ -242,7 +282,7 @@ public class SalesFormController {
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> addReceipt(@RequestBody Map<String, Object> body, Authentication auth) {
         LocalDate date = LocalDate.parse((String) body.get("date"));
-        if (isMonthLocked(auth.getName(), date.getYear(), date.getMonthValue()))
+        if (isLocked(auth.getName(), date))
             return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
         try {
             SalesReceipt r = new SalesReceipt();
@@ -262,7 +302,7 @@ public class SalesFormController {
             if (!r.getSalesUsername().equals(auth.getName()))
                 return ResponseEntity.status(403).body(Map.of("error", "권한 없음"));
             LocalDate date = LocalDate.parse((String) body.get("date"));
-            if (isMonthLocked(auth.getName(), date.getYear(), date.getMonthValue()))
+            if (isLocked(auth.getName(), date))
                 return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
             saveReceipt(r, body, auth.getName(), date);
             receiptRepository.save(r);
@@ -277,7 +317,7 @@ public class SalesFormController {
             SalesReceipt r = receiptRepository.findById(id).orElseThrow();
             if (!r.getSalesUsername().equals(auth.getName()))
                 return ResponseEntity.status(403).body(Map.of("error", "권한 없음"));
-            if (isMonthLocked(auth.getName(), r.getYear(), r.getMonth()))
+            if (isLocked(auth.getName(), r.getDate()))
                 return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
             receiptRepository.deleteById(id);
             return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
