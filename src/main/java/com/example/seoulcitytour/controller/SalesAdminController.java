@@ -164,7 +164,7 @@ public class SalesAdminController {
     @GetMapping("/categories")
     public ResponseEntity<?> getCategories() {
         return ResponseEntity.ok(categoryRepository.findAllByOrderByNameAsc().stream()
-                .map(c -> Map.of("id", c.getId(), "name", c.getName(), "unit", c.getUnit(), "active", c.getActive()))
+                .map(c -> Map.of("id", c.getId(), "name", c.getName()))
                 .toList());
     }
 
@@ -172,27 +172,21 @@ public class SalesAdminController {
     public ResponseEntity<?> addCategory(@RequestBody Map<String, String> body) {
         try {
             String name = body.get("name");
-            String unit = body.getOrDefault("unit", "원");
             if (name == null || name.isBlank())
                 return ResponseEntity.badRequest().body(Map.of("error", "카테고리 이름을 입력해주세요."));
             if (categoryRepository.existsByName(name.trim()))
                 return ResponseEntity.badRequest().body(Map.of("error", "이미 존재하는 카테고리입니다."));
             SalesCategory c = new SalesCategory();
             setField(c, "name", name.trim());
-            setField(c, "unit", unit);
-            setField(c, "active", true);
             categoryRepository.save(c);
             return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
     @DeleteMapping("/categories/{id}")
-    @Transactional
     public ResponseEntity<?> deleteCategory(@PathVariable Long id) {
         try {
-            SalesCategory c = categoryRepository.findById(id).orElseThrow();
-            setField(c, "active", false);
-            categoryRepository.save(c);
+            categoryRepository.deleteById(id);
             return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }

@@ -14,13 +14,6 @@ public class SalesCategory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String name;
-
-    // "원" 또는 "L"
-    @Column(nullable = false)
-    private String unit = "원";
-
-    @Column(nullable = false)
-    private Boolean active = true;
 }

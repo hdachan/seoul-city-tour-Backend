@@ -97,8 +97,8 @@ public class SalesFormController {
     @GetMapping("/categories")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> getCategories() {
-        return ResponseEntity.ok(categoryRepository.findByActiveTrueOrderByNameAsc().stream()
-                .map(c -> Map.of("id", c.getId(), "name", c.getName(), "unit", c.getUnit()))
+        return ResponseEntity.ok(categoryRepository.findAllByOrderByNameAsc().stream()
+                .map(c -> Map.of("id", c.getId(), "name", c.getName()))
                 .toList());
     }
 
@@ -116,6 +116,13 @@ public class SalesFormController {
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> getPurposes(Authentication auth) {
         return ResponseEntity.ok(drivingRepository.findDistinctPurposes(auth.getName()));
+    }
+
+    // ── 도착지 자동완성 ──
+    @GetMapping("/destinations")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    public ResponseEntity<?> getDestinations(Authentication auth) {
+        return ResponseEntity.ok(drivingRepository.findDistinctDestinations(auth.getName()));
     }
 
     // ────────────────────────────────────────
@@ -345,7 +352,7 @@ public class SalesFormController {
         if ("업무".equals(type)) {
             setField(d, "destination",   body.getOrDefault("destination", ""));
             setField(d, "arrivalTime",   body.getOrDefault("arrivalTime", ""));
-            setField(d, "purpose",       "");
+            setField(d, "purpose",       body.getOrDefault("purpose", ""));
             setField(d, "fuelAmount",    0.0);
             setField(d, "fuelCost",      0L);
             setField(d, "fuelUnitPrice", 0);

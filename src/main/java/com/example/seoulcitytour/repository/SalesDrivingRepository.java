@@ -43,6 +43,12 @@ public interface SalesDrivingRepository extends JpaRepository<SalesDriving, Long
             "ORDER BY d.purpose ASC")
     List<String> findDistinctPurposes(@Param("username") String username);
 
+    // 도착지 자동완성 (중복 제거)
+    @Query("SELECT DISTINCT d.destination FROM SalesDriving d " +
+            "WHERE d.salesUsername = :username AND d.destination IS NOT NULL AND d.destination != '' " +
+            "ORDER BY d.destination ASC")
+    List<String> findDistinctDestinations(@Param("username") String username);
+
     // 월별 입력된 날짜 목록
     @Query("SELECT DISTINCT d.date FROM SalesDriving d " +
             "WHERE d.salesUsername = :username AND d.year = :year AND d.month = :month")
