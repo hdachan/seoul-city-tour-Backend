@@ -160,6 +160,17 @@ public class SalesAdminController {
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
+    // ── 도착지/용무 자동완성 ──
+    @GetMapping("/destinations")
+    public ResponseEntity<?> getDestinations() {
+        return ResponseEntity.ok(drivingRepository.findDistinctDestinations(null));
+    }
+
+    @GetMapping("/purposes")
+    public ResponseEntity<?> getPurposes() {
+        return ResponseEntity.ok(drivingRepository.findDistinctPurposes(null));
+    }
+
     // ── 카테고리 ──
     @GetMapping("/categories")
     public ResponseEntity<?> getCategories() {
@@ -200,6 +211,14 @@ public class SalesAdminController {
         return ResponseEntity.ok(list.stream().map(d -> buildDrivingMap(d)).toList());
     }
 
+    @GetMapping("/driving/prev-meter")
+    public ResponseEntity<?> getPrevMeter(@RequestParam String salesUsername,
+                                          @RequestParam String date) {
+        var list = drivingRepository.findPrevMeterReadings(salesUsername, java.time.LocalDate.parse(date));
+        Integer prevMeter = list.isEmpty() ? null : list.get(0).getMeterReading();
+        return ResponseEntity.ok(Map.of("prevMeter", prevMeter != null ? prevMeter : 0));
+    }
+
     @GetMapping("/driving/date")
     public ResponseEntity<?> getDrivingByDate(@RequestParam String salesUsername,
                                               @RequestParam String date) {
@@ -211,10 +230,33 @@ public class SalesAdminController {
     public ResponseEntity<?> addDriving(@RequestBody Map<String, Object> body) {
         try {
             String    salesUsername = (String) body.get("salesUsername");
-            LocalDate date = LocalDate.parse((String) body.get("date"));
-            SalesDriving d = new SalesDriving();
-            saveDriving(d, body, salesUsername, date);
-            drivingRepository.save(d);
+            LocalDate startDate = body.get("startDate") != null
+                    ? LocalDate.parse((String) body.get("startDate"))
+                    : LocalDate.parse((String) body.get("date"));
+            LocalDate endDate = body.get("endDate") != null && !((String)body.getOrDefault("endDate","")).isBlank()
+                    ? LocalDate.parse((String) body.get("endDate")) : startDate;
+
+            Integer newMeter = body.get("meterReading") != null && !body.get("meterReading").toString().isBlank()
+                    ? Integer.parseInt(body.get("meterReading").toString()) : null;
+
+            LocalDate cur = startDate;
+            while (!cur.isAfter(endDate)) {
+                // 미터기 중복/역주행 체크
+                if (newMeter != null) {
+                    var existing = drivingRepository.findBySalesUsernameAndDateOrderByIdAsc(salesUsername, cur);
+                    int maxExisting = existing.stream()
+                            .mapToInt(d -> d.getMeterReading() != null ? d.getMeterReading() : 0)
+                            .max().orElse(0);
+                    if (maxExisting > 0 && newMeter <= maxExisting) {
+                        return ResponseEntity.badRequest().body(Map.of("error",
+                                "이미 더 높은 미터기 값(" + maxExisting + "km)이 존재합니다. 입력값: " + newMeter + "km"));
+                    }
+                }
+                SalesDriving d = new SalesDriving();
+                saveDriving(d, body, salesUsername, cur);
+                drivingRepository.save(d);
+                cur = cur.plusDays(1);
+            }
             return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage())); }
     }

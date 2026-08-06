@@ -222,9 +222,25 @@ public class SalesFormController {
                 cur = cur.plusDays(1);
             }
 
+            Integer newMeter = body.get("meterReading") != null && !body.get("meterReading").toString().isBlank()
+                    ? Integer.parseInt(body.get("meterReading").toString()) : null;
+
             for (LocalDate date : dates) {
                 if (isLocked(auth.getName(), date))
-                    continue; // 잠긴 달은 건너뜀
+                    continue; // 잠긴 주는 건너뜀
+
+                // 미터기 중복/역주행 체크 (업무/휴가 타입이고 미터기 있을 때만)
+                if (newMeter != null) {
+                    var existing = drivingRepository.findBySalesUsernameAndDateOrderByIdAsc(auth.getName(), date);
+                    int maxExisting = existing.stream()
+                            .mapToInt(d -> d.getMeterReading() != null ? d.getMeterReading() : 0)
+                            .max().orElse(0);
+                    if (maxExisting > 0 && newMeter <= maxExisting) {
+                        return ResponseEntity.badRequest().body(Map.of("error",
+                                "이미 더 높은 미터기 값(" + maxExisting + "km)이 존재합니다. 입력값: " + newMeter + "km"));
+                    }
+                }
+
                 SalesDriving d = new SalesDriving();
                 saveDriving(d, body, auth.getName(), date);
                 drivingRepository.save(d);

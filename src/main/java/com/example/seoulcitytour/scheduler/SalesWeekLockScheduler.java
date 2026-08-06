@@ -23,6 +23,13 @@ public class SalesWeekLockScheduler {
     private final SalesMonthLockRepository lockRepository;
     private final UserRepository           userRepository;
 
+    // 서버 시작 시 한 번 실행
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        log.info("서버 시작 - 주 잠금 상태 초기화");
+        autoLockPastWeeks();
+    }
+
     // 매일 자정 실행 - 이번 주 오픈 + 지난 주 자동 잠금
     @Scheduled(cron = "0 0 0 * * *")
     public void autoLockPastWeeks() {
