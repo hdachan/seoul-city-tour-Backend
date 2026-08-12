@@ -52,13 +52,17 @@ public class SalesAdminController {
             int drivingCount = driving.size();
             boolean locked = false;
 
-            // 미터기 기반 운행거리 계산
+            // 미터기 기반 운행거리 계산 (전월 마지막 미터기 포함)
             var sorted = driving.stream()
                     .filter(d -> d.getMeterReading() != null && d.getMeterReading() > 0)
                     .sorted(java.util.Comparator.comparing(com.example.seoulcitytour.entity.SalesDriving::getDate)
                             .thenComparing(d -> d.getArrivalTime() != null ? d.getArrivalTime() : ""))
                     .toList();
-            long totalDist = 0; int lastMeter = 0;
+            // 이번 달 첫 날 이전 마지막 미터기 가져오기
+            java.time.LocalDate firstDay = java.time.LocalDate.of(year, month, 1);
+            var prevList = drivingRepository.findPrevMeterReadings(u.getUsername(), firstDay);
+            long totalDist = 0;
+            int lastMeter = prevList.isEmpty() ? 0 : (prevList.get(0).getMeterReading() != null ? prevList.get(0).getMeterReading() : 0);
             for (var d : sorted) {
                 int m = d.getMeterReading();
                 if (lastMeter > 0 && m > lastMeter) totalDist += (m - lastMeter);

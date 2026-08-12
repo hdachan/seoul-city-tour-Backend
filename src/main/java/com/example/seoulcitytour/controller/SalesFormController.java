@@ -44,7 +44,6 @@ public class SalesFormController {
         int year  = date.getYear();
         int month = date.getMonthValue();
 
-        // DB weekLocks 기준으로만 체크 (스케줄러가 이번주=false, 지난주=true 관리)
         var allLocks = lockRepository.findBySalesUsernameAndYearAndMonth(username, year, month);
 
         // 월 전체 잠금 체크
@@ -53,14 +52,20 @@ public class SalesFormController {
                 .map(SalesMonthLock::getLocked).orElse(false);
         if (monthLocked) return true;
 
+        // 이번 주 번호
+        int currentWeekNum = SalesWeekLockScheduler.getCurrentWeekNum(year, month);
+
         // 해당 날짜의 주 잠금 체크
         var weeks = SalesWeekLockScheduler.getWeeksOfMonth(year, month);
         for (var week : weeks) {
             if (!date.isBefore(week.start()) && !date.isAfter(week.end())) {
-                // DB에 레코드 없으면 잠금 (스케줄러가 아직 실행 안 된 경우)
-                return allLocks.stream()
-                        .filter(l -> l.getWeekNum() == week.weekNum()).findFirst()
-                        .map(SalesMonthLock::getLocked).orElse(true);
+                var record = allLocks.stream().filter(l -> l.getWeekNum() == week.weekNum()).findFirst();
+                if (record.isPresent()) {
+                    return record.get().getLocked();
+                } else {
+                    // DB 없으면 이번 주=열림, 나머지=잠김 (getLockInfo와 동일)
+                    return week.weekNum() != currentWeekNum;
+                }
             }
         }
         return true;
