@@ -23,14 +23,15 @@ public class DevController {
     private final TabPermissionRepository tabPermissionRepository;
 
     private static final List<Map<String, String>> ALL_TABS = List.of(
-        Map.of("id", "record",      "label", "📋 운행 기록"),
-        Map.of("id", "settlement",  "label", "💰 업체별 정산"),
-        Map.of("id", "ginseng",     "label", "🌿 인삼 매출"),
-        Map.of("id", "guide-admin", "label", "📂 가이드 정산관리"),
-        Map.of("id", "sales-admin", "label", "📊 영업 정산관리"),
-        Map.of("id", "guide-form",  "label", "📝 가이드 정산"),
-        Map.of("id", "sales",       "label", "💼 영업 정산"),
-        Map.of("id", "admin",       "label", "👥 계정 관리")
+            Map.of("id", "record",      "label", "📋 운행 기록"),
+            Map.of("id", "settlement",  "label", "💰 업체별 정산"),
+            Map.of("id", "ginseng",     "label", "🌿 인삼 매출"),
+            Map.of("id", "guide-admin", "label", "📂 가이드 정산관리"),
+            Map.of("id", "sales-admin", "label", "📊 영업 정산관리"),
+            Map.of("id", "guide-form",  "label", "📝 가이드 정산"),
+            Map.of("id", "sales",       "label", "💼 영업 정산"),
+            Map.of("id", "dmz",         "label", "🗺 DMZ 예약 정보"),
+            Map.of("id", "admin",       "label", "👥 계정 관리")
     );
 
     // ── 탭 목록 (ADMIN, DEV 모두 접근 가능) ──
