@@ -122,7 +122,7 @@ public class SalesFormController {
     public ResponseEntity<?> getNotes(@PathVariable Long drivingId) {
         var notes = noteRepository.findByDrivingIdOrderBySortOrderAsc(drivingId);
         return ResponseEntity.ok(notes.stream()
-                .map(n -> Map.of("id", n.getId(), "content", n.getContent(), "sortOrder", n.getSortOrder()))
+                .map(n -> Map.of("id", n.getId(), "content", n.getContent(), "time", n.getTime() != null ? n.getTime() : "", "sortOrder", n.getSortOrder()))
                 .toList());
     }
 
@@ -130,20 +130,21 @@ public class SalesFormController {
     @PostMapping("/driving/{drivingId}/notes")
     @jakarta.transaction.Transactional
     public ResponseEntity<?> saveNotes(@PathVariable Long drivingId,
-                                       @RequestBody java.util.List<String> contents,
+                                       @RequestBody java.util.List<Map<String, String>> items,
                                        Authentication auth) {
-        // 해당 운행일지가 본인 것인지 확인
         var driving = drivingRepository.findById(drivingId).orElse(null);
         if (driving == null || !driving.getSalesUsername().equals(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "권한이 없습니다."));
 
         noteRepository.deleteByDrivingId(drivingId);
         try {
-            for (int i = 0; i < contents.size(); i++) {
-                if (contents.get(i) == null || contents.get(i).isBlank()) continue;
+            for (int i = 0; i < items.size(); i++) {
+                String content2 = items.get(i).getOrDefault("content", "");
+                if (content2 == null || content2.isBlank()) continue;
                 var note = new com.example.seoulcitytour.entity.SalesDrivingNote();
                 setField(note, "drivingId", drivingId);
-                setField(note, "content",   contents.get(i).trim());
+                setField(note, "content",   content2.trim());
+                setField(note, "time",      items.get(i).getOrDefault("time", ""));
                 setField(note, "sortOrder", i);
                 noteRepository.save(note);
             }
@@ -278,7 +279,7 @@ public class SalesFormController {
                     int maxExisting = existing.stream()
                             .mapToInt(d -> d.getMeterReading() != null ? d.getMeterReading() : 0)
                             .max().orElse(0);
-                    if (maxExisting > 0 && newMeter <= maxExisting) {
+                    if (maxExisting > 0 && newMeter < maxExisting) {
                         return ResponseEntity.badRequest().body(Map.of("error",
                                 "이미 더 높은 미터기 값(" + maxExisting + "km)이 존재합니다. 입력값: " + newMeter + "km"));
                     }
@@ -463,7 +464,7 @@ public class SalesFormController {
         m.put("meterReading",  d.getMeterReading() != null ? d.getMeterReading() : 0);
         m.put("purpose",       d.getPurpose() != null ? d.getPurpose() : "");
         var notes = noteRepository.findByDrivingIdOrderBySortOrderAsc(d.getId());
-        m.put("notes", notes.stream().map(n -> Map.of("id", n.getId(), "content", n.getContent())).toList());
+        m.put("notes", notes.stream().map(n -> Map.of("id", n.getId(), "content", n.getContent(), "time", n.getTime() != null ? n.getTime() : "")).toList());
         m.put("fuelAmount",    d.getFuelAmount() != null ? d.getFuelAmount() : 0.0);
         m.put("fuelCost",      d.getFuelCost() != null ? d.getFuelCost() : 0L);
         m.put("fuelUnitPrice", d.getFuelUnitPrice() != null ? d.getFuelUnitPrice() : 0);

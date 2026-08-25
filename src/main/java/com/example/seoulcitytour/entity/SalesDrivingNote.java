@@ -20,6 +20,9 @@ public class SalesDrivingNote {
     @Column(nullable = false, length = 500)
     private String content;
 
+    @Column(length = 10)
+    private String time; // HH:mm 형식
+
     @Column(name = "sort_order")
     private Integer sortOrder = 0;
 }
