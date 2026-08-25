@@ -24,6 +24,7 @@ public class SalesAdminController {
     private final UserRepository            userRepository;
     private final SalesReceiptRepository    receiptRepository;
     private final SalesDrivingRepository    drivingRepository;
+    private final com.example.seoulcitytour.repository.SalesDrivingNoteRepository noteRepository;
     private final SalesMonthLockRepository  lockRepository;
     private final SalesCategoryRepository   categoryRepository;
     private final SalesDailyNoteRepository  dailyNoteRepository;
@@ -164,6 +165,35 @@ public class SalesAdminController {
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
+    // ── 비고 목록 조회/저장 (관리자) ──
+    @GetMapping("/driving/{drivingId}/notes")
+    public ResponseEntity<?> getNotes(@PathVariable Long drivingId) {
+        var notes = noteRepository.findByDrivingIdOrderBySortOrderAsc(drivingId);
+        return ResponseEntity.ok(notes.stream()
+                .map(n -> Map.of("id", n.getId(), "content", n.getContent(), "sortOrder", n.getSortOrder()))
+                .toList());
+    }
+
+    @PostMapping("/driving/{drivingId}/notes")
+    @jakarta.transaction.Transactional
+    public ResponseEntity<?> saveNotes(@PathVariable Long drivingId,
+                                       @RequestBody java.util.List<String> contents) {
+        noteRepository.deleteByDrivingId(drivingId);
+        try {
+            for (int i = 0; i < contents.size(); i++) {
+                if (contents.get(i) == null || contents.get(i).isBlank()) continue;
+                var note = new com.example.seoulcitytour.entity.SalesDrivingNote();
+                setField(note, "drivingId", drivingId);
+                setField(note, "content",   contents.get(i).trim());
+                setField(note, "sortOrder", i);
+                noteRepository.save(note);
+            }
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+        return ResponseEntity.ok(Map.of("message", "저장되었습니다."));
+    }
+
     // ── 도착지/용무 자동완성 ──
     @GetMapping("/destinations")
     public ResponseEntity<?> getDestinations() {
@@ -242,6 +272,7 @@ public class SalesAdminController {
 
             Integer newMeter = body.get("meterReading") != null && !body.get("meterReading").toString().isBlank()
                     ? Integer.parseInt(body.get("meterReading").toString()) : null;
+            Long lastSavedId = null;
 
             LocalDate cur = startDate;
             while (!cur.isAfter(endDate)) {
@@ -258,10 +289,11 @@ public class SalesAdminController {
                 }
                 SalesDriving d = new SalesDriving();
                 saveDriving(d, body, salesUsername, cur);
-                drivingRepository.save(d);
+                var saved = drivingRepository.save(d);
+                lastSavedId = saved.getId();
                 cur = cur.plusDays(1);
             }
-            return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
+            return ResponseEntity.ok(Map.of("message", "추가되었습니다.", "id", lastSavedId != null ? lastSavedId : 0));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage())); }
     }
 
@@ -273,7 +305,7 @@ public class SalesAdminController {
             LocalDate date = LocalDate.parse((String) body.get("date"));
             saveDriving(d, body, d.getSalesUsername(), date);
             drivingRepository.save(d);
-            return ResponseEntity.ok(Map.of("message", "수정되었습니다."));
+            return ResponseEntity.ok(Map.of("message", "수정되었습니다.", "id", d.getId()));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "수정 실패: " + e.getMessage())); }
     }
 
@@ -407,6 +439,8 @@ public class SalesAdminController {
         m.put("arrivalTime",   d.getArrivalTime() != null ? d.getArrivalTime() : "");
         m.put("meterReading",  d.getMeterReading() != null ? d.getMeterReading() : 0);
         m.put("purpose",       d.getPurpose() != null ? d.getPurpose() : "");
+        var notes = noteRepository.findByDrivingIdOrderBySortOrderAsc(d.getId());
+        m.put("notes", notes.stream().map(n -> Map.of("id", n.getId(), "content", n.getContent())).toList());
         m.put("fuelAmount",    d.getFuelAmount() != null ? d.getFuelAmount() : 0.0);
         m.put("fuelCost",      d.getFuelCost() != null ? d.getFuelCost() : 0L);
         m.put("fuelUnitPrice", d.getFuelUnitPrice() != null ? d.getFuelUnitPrice() : 0);
