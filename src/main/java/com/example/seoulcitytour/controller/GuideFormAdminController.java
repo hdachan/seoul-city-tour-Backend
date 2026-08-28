@@ -51,6 +51,39 @@ public class GuideFormAdminController {
                 .toList());
     }
 
+    @GetMapping("/tour-names/all")
+    public ResponseEntity<?> getAllTourNames() {
+        return ResponseEntity.ok(tourNameRepository.findAll().stream()
+                .filter(t -> t.getActive())
+                .sorted((a, b) -> a.getName().compareTo(b.getName()))
+                .map(t -> Map.of("id", t.getId(), "name", t.getName()))
+                .toList());
+    }
+
+    @PostMapping("/tour-names")
+    public ResponseEntity<?> addTourName(@RequestBody Map<String, Object> body) {
+        try {
+            String name = ((String) body.get("name")).trim();
+            if (name.isBlank())
+                return ResponseEntity.badRequest().body(Map.of("error", "이름을 입력해주세요."));
+            if (tourNameRepository.existsByName(name))
+                return ResponseEntity.badRequest().body(Map.of("error", "이미 존재하는 투어입니다."));
+            com.example.seoulcitytour.entity.TourName t = new com.example.seoulcitytour.entity.TourName();
+            setField(t, "name",   name);
+            setField(t, "active", true);
+            tourNameRepository.save(t);
+            return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+    }
+
+    @DeleteMapping("/tour-names/{id}")
+    public ResponseEntity<?> deleteTourName(@PathVariable Long id) {
+        try {
+            tourNameRepository.deleteById(id);
+            return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+    }
+
     // ── 월별 입력 현황 요약 (카드뷰 - active=true만) ──
     @GetMapping("/summary")
     public ResponseEntity<?> getSummary(@RequestParam Integer year, @RequestParam Integer month) {
