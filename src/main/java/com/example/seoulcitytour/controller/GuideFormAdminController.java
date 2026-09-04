@@ -155,6 +155,7 @@ public class GuideFormAdminController {
                 "amount",             i.getAmount() != null ? i.getAmount() : 0L,
                 "headcount",          i.getHeadcount() != null ? i.getHeadcount() : 0,
                 "totalAmount",        i.getTotalAmount() != null ? i.getTotalAmount() : 0L,
+                "note",               i.getNote() != null ? i.getNote() : "",
                 "paymentType",        i.getPaymentType(),
                 "date",               i.getDate().toString()
         )).toList());

@@ -35,7 +35,10 @@ public class GuideIncome {
     private Long totalAmount;       // 합계 (금액 × 인원)
 
     @Column(nullable = false)
-    private String paymentType;     // 현금 / 카드 / 그외
+    private String paymentType;     // 현금 / 카드 / 그외 / 완불
+
+    @Column
+    private String note;            // 북한관수수료 / 가이드입장료 / 책수수료 / 기타내용
 
     @Column(nullable = false)
     private LocalDate date;
