@@ -32,7 +32,7 @@ public class GuideFormController {
     private final GuideMonthLockRepository lockRepository;
 
     private boolean isMonthLocked(String guideUsername) {
-        LocalDate now = LocalDate.now();
+        LocalDate now = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
         return lockRepository
                 .findByGuideUsernameAndYearAndMonth(guideUsername, now.getYear(), now.getMonthValue())
                 .map(GuideMonthLock::getLocked).orElse(false);
@@ -81,18 +81,27 @@ public class GuideFormController {
     @GetMapping("/records")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> getRecords(Authentication auth) {
-        LocalDate now = LocalDate.now();
+        LocalDate now = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
         var list = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(
                 auth.getName(), now.getYear(), now.getMonthValue());
-        return ResponseEntity.ok(list.stream().map(i -> Map.of(
-                "id",                 i.getId(),
-                "tourName",           i.getTourName(),
-                "representativeName", i.getRepresentativeName() != null ? i.getRepresentativeName() : "",
-                "amount",             i.getAmount() != null ? i.getAmount() : 0L,
-                "headcount",          i.getHeadcount() != null ? i.getHeadcount() : 0,
-                "totalAmount",        i.getTotalAmount() != null ? i.getTotalAmount() : 0L,
-                "paymentType",        i.getPaymentType()
-        )).toList());
+        return ResponseEntity.ok(list.stream().map(i -> {
+            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id",                 i.getId());
+            m.put("tourName",           i.getTourName());
+            m.put("representativeName", i.getRepresentativeName() != null ? i.getRepresentativeName() : "");
+            m.put("amount",             i.getAmount() != null ? i.getAmount() : 0L);
+            m.put("headcount",          i.getHeadcount() != null ? i.getHeadcount() : 0);
+            m.put("adult",              i.getAdult() != null ? i.getAdult() : 0);
+            m.put("child",              i.getChild() != null ? i.getChild() : 0);
+            m.put("childAmount",        i.getChildAmount() != null ? i.getChildAmount() : 0L);
+            m.put("infant",             i.getInfant() != null ? i.getInfant() : 0);
+            m.put("totalAmount",        i.getTotalAmount() != null ? i.getTotalAmount() : 0L);
+            m.put("note",               i.getNote() != null ? i.getNote() : "");
+            m.put("memo",               i.getMemo() != null ? i.getMemo() : "");
+            m.put("paymentType",        i.getPaymentType());
+            m.put("date",               i.getDate() != null ? i.getDate().toString() : "");
+            return m;
+        }).toList());
     }
 
     // ── 수입 추가 ──
@@ -102,13 +111,17 @@ public class GuideFormController {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
         try {
-            LocalDate date = LocalDate.now();
+            LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
             long amount    = parseL(body, "amount");
             int headcount  = parseI(body, "headcount");
             String payType = (String) body.get("paymentType");
 
             GuideIncome income = new GuideIncome();
             setField(income, "guideUsername",      auth.getName());
+            String dateStr2 = (String) body.get("date");
+            if (dateStr2 != null && !dateStr2.isBlank()) {
+                setField(income, "date", LocalDate.parse(dateStr2));
+            }
             setField(income, "tourName",           (String) body.get("tourName"));
             setField(income, "representativeName", body.getOrDefault("representativeName", ""));
             setField(income, "paymentType",        payType);
@@ -116,11 +129,32 @@ public class GuideFormController {
             setField(income, "year",               date.getYear());
             setField(income, "month",              date.getMonthValue());
             setField(income, "locked",             false);
-            if ("카드".equals(payType) || "현금".equals(payType)) {
+            int  adult       = parseI(body, "adult");
+            int  child       = parseI(body, "child");
+            long childAmount = parseL(body, "childAmount");
+            int  infant      = parseI(body, "infant");
+            if (adult > 0 || child > 0 || infant > 0) headcount = adult + child + infant;
+
+            if ("완불".equals(payType) || "그외".equals(payType)) {
+                setField(income, "amount",      0L);
+                setField(income, "headcount",   headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "childAmount", 0L);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", 0L);
+            } else {
+                long totalAmt = amount * adult + childAmount * child;
                 setField(income, "amount",      amount);
                 setField(income, "headcount",   headcount);
-                setField(income, "totalAmount", amount * headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "childAmount", childAmount);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", totalAmt);
             }
+            setField(income, "note", body.getOrDefault("note", ""));
+            setField(income, "memo", body.getOrDefault("memo", ""));
             incomeRepository.save(income);
             return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage())); }
@@ -139,22 +173,42 @@ public class GuideFormController {
             if (!income.getGuideUsername().equals(auth.getName()))
                 return ResponseEntity.status(403).body(Map.of("error", "본인 항목만 수정 가능합니다."));
 
-            long amount    = parseL(body, "amount");
-            int headcount  = parseI(body, "headcount");
-            String payType = (String) body.get("paymentType");
+            long amount      = parseL(body, "amount");
+            long childAmount = parseL(body, "childAmount");
+            int  headcount   = parseI(body, "headcount");
+            int  adult       = parseI(body, "adult");
+            int  child       = parseI(body, "child");
+            int  infant      = parseI(body, "infant");
+            String payType   = (String) body.get("paymentType");
+            if (adult > 0 || child > 0 || infant > 0) headcount = adult + child + infant;
 
+            String dateStr2 = (String) body.get("date");
+            if (dateStr2 != null && !dateStr2.isBlank()) {
+                setField(income, "date", LocalDate.parse(dateStr2));
+            }
             setField(income, "tourName",           (String) body.get("tourName"));
             setField(income, "representativeName", body.getOrDefault("representativeName", ""));
             setField(income, "paymentType",        payType);
-            if ("카드".equals(payType) || "현금".equals(payType)) {
+            if ("완불".equals(payType) || "그외".equals(payType)) {
+                setField(income, "amount",      0L);
+                setField(income, "headcount",   headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "childAmount", 0L);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", 0L);
+            } else {
+                long totalAmt = amount * adult + childAmount * child;
                 setField(income, "amount",      amount);
                 setField(income, "headcount",   headcount);
-                setField(income, "totalAmount", amount * headcount);
-            } else {
-                setField(income, "amount",      0L);
-                setField(income, "headcount",   0);
-                setField(income, "totalAmount", 0L);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "childAmount", childAmount);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", totalAmt);
             }
+            setField(income, "note", body.getOrDefault("note", ""));
+            setField(income, "memo", body.getOrDefault("memo", ""));
             incomeRepository.save(income);
             return ResponseEntity.ok(Map.of("message", "수정되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "수정 실패: " + e.getMessage())); }
@@ -179,7 +233,7 @@ public class GuideFormController {
     @GetMapping("/expense")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> getExpense(Authentication auth) {
-        LocalDate now = LocalDate.now();
+        LocalDate now = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
         var list = expenseRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(
                 auth.getName(), now.getYear(), now.getMonthValue());
         return ResponseEntity.ok(list.stream().map(e -> Map.of(
@@ -200,7 +254,7 @@ public class GuideFormController {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
         try {
-            LocalDate date = LocalDate.now();
+            LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
             long amount    = parseL(body, "amount");
             int headcount  = parseI(body, "headcount");
 
@@ -264,7 +318,7 @@ public class GuideFormController {
     @GetMapping("/daily-fee")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> getDailyFee(Authentication auth) {
-        LocalDate now = LocalDate.now();
+        LocalDate now = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
         var list = dailyFeeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(
                 auth.getName(), now.getYear(), now.getMonthValue());
         return ResponseEntity.ok(list.stream().map(d -> Map.of(

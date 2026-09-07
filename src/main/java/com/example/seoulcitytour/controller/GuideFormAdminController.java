@@ -148,17 +148,24 @@ public class GuideFormAdminController {
     public ResponseEntity<?> getIncome(@RequestParam String guideUsername,
                                        @RequestParam Integer year, @RequestParam Integer month) {
         var list = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(guideUsername, year, month);
-        return ResponseEntity.ok(list.stream().map(i -> Map.of(
-                "id",                 i.getId(),
-                "tourName",           i.getTourName(),
-                "representativeName", i.getRepresentativeName() != null ? i.getRepresentativeName() : "",
-                "amount",             i.getAmount() != null ? i.getAmount() : 0L,
-                "headcount",          i.getHeadcount() != null ? i.getHeadcount() : 0,
-                "totalAmount",        i.getTotalAmount() != null ? i.getTotalAmount() : 0L,
-                "note",               i.getNote() != null ? i.getNote() : "",
-                "paymentType",        i.getPaymentType(),
-                "date",               i.getDate().toString()
-        )).toList());
+        return ResponseEntity.ok(list.stream().map(i -> {
+            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id",                 i.getId());
+            m.put("tourName",           i.getTourName());
+            m.put("representativeName", i.getRepresentativeName() != null ? i.getRepresentativeName() : "");
+            m.put("amount",             i.getAmount() != null ? i.getAmount() : 0L);
+            m.put("headcount",          i.getHeadcount() != null ? i.getHeadcount() : 0);
+            m.put("adult",              i.getAdult() != null ? i.getAdult() : 0);
+            m.put("child",              i.getChild() != null ? i.getChild() : 0);
+            m.put("childAmount",        i.getChildAmount() != null ? i.getChildAmount() : 0L);
+            m.put("infant",             i.getInfant() != null ? i.getInfant() : 0);
+            m.put("totalAmount",        i.getTotalAmount() != null ? i.getTotalAmount() : 0L);
+            m.put("note",               i.getNote() != null ? i.getNote() : "");
+            m.put("memo",               i.getMemo() != null ? i.getMemo() : "");
+            m.put("paymentType",        i.getPaymentType());
+            m.put("date",               i.getDate().toString());
+            return m;
+        }).toList());
     }
 
     // ── 수입 추가 ──
@@ -166,10 +173,19 @@ public class GuideFormAdminController {
     public ResponseEntity<?> addIncome(@RequestBody Map<String, Object> body) {
         try {
             String    guideUsername = (String) body.get("guideUsername");
-            LocalDate date          = LocalDate.now();
             long      amount        = parseL(body, "amount");
+            long      childAmount   = parseL(body, "childAmount");
             int       headcount     = parseI(body, "headcount");
+            int       adult         = parseI(body, "adult");
+            int       child         = parseI(body, "child");
+            int       infant        = parseI(body, "infant");
+            if (adult > 0 || child > 0 || infant > 0) headcount = adult + child + infant;
             String    payType       = (String) body.get("paymentType");
+
+            String dateStr = (String) body.get("date");
+            LocalDate date = (dateStr != null && !dateStr.isBlank())
+                    ? LocalDate.parse(dateStr)
+                    : LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
 
             GuideIncome income = new GuideIncome();
             setField(income, "guideUsername",      guideUsername);
@@ -180,13 +196,28 @@ public class GuideFormAdminController {
             setField(income, "year",               date.getYear());
             setField(income, "month",              date.getMonthValue());
             setField(income, "locked",             false);
-            if ("카드".equals(payType) || "현금".equals(payType)) {
-                setField(income, "amount",      amount);
+            setField(income, "note",               body.getOrDefault("note", ""));
+            setField(income, "memo",               body.getOrDefault("memo", ""));
+            if ("완불".equals(payType) || "그외".equals(payType) || payType.startsWith("그외-")) {
+                setField(income, "amount",      0L);
+                setField(income, "childAmount", 0L);
                 setField(income, "headcount",   headcount);
-                setField(income, "totalAmount", amount * headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", 0L);
+            } else {
+                long totalAmt = amount * adult + childAmount * child;
+                setField(income, "amount",      amount);
+                setField(income, "childAmount", childAmount);
+                setField(income, "headcount",   headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", totalAmt);
             }
             incomeRepository.save(income);
-            return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
+            return ResponseEntity.ok(Map.of("message", "추가되었습니다.", "id", income.getId()));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage())); }
     }
 
@@ -195,18 +226,43 @@ public class GuideFormAdminController {
     public ResponseEntity<?> updateIncome(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         try {
             GuideIncome income = incomeRepository.findById(id).orElseThrow();
-            long   amount    = parseL(body, "amount");
-            int    headcount = parseI(body, "headcount");
-            String payType   = (String) body.get("paymentType");
+            long   amount      = parseL(body, "amount");
+            long   childAmount = parseL(body, "childAmount");
+            int    headcount   = parseI(body, "headcount");
+            int    adult       = parseI(body, "adult");
+            int    child       = parseI(body, "child");
+            int    infant      = parseI(body, "infant");
+            if (adult > 0 || child > 0 || infant > 0) headcount = adult + child + infant;
+            String payType     = (String) body.get("paymentType");
+            String dateStr2    = (String) body.get("date");
+            if (dateStr2 != null && !dateStr2.isBlank()) {
+                LocalDate newDate = LocalDate.parse(dateStr2);
+                setField(income, "date",  newDate);
+                setField(income, "year",  newDate.getYear());
+                setField(income, "month", newDate.getMonthValue());
+            }
             setField(income, "tourName",           (String) body.get("tourName"));
             setField(income, "representativeName", body.getOrDefault("representativeName", ""));
             setField(income, "paymentType",        payType);
-            if ("카드".equals(payType) || "현금".equals(payType)) {
-                setField(income, "amount",      amount);
+            setField(income, "note",               body.getOrDefault("note", ""));
+            setField(income, "memo",               body.getOrDefault("memo", ""));
+            if ("완불".equals(payType) || "그외".equals(payType) || payType.startsWith("그외-")) {
+                setField(income, "amount",      0L);
+                setField(income, "childAmount", 0L);
                 setField(income, "headcount",   headcount);
-                setField(income, "totalAmount", amount * headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", 0L);
             } else {
-                setField(income, "amount", 0L); setField(income, "headcount", 0); setField(income, "totalAmount", 0L);
+                long totalAmt = amount * adult + childAmount * child;
+                setField(income, "amount",      amount);
+                setField(income, "childAmount", childAmount);
+                setField(income, "headcount",   headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", totalAmt);
             }
             incomeRepository.save(income);
             return ResponseEntity.ok(Map.of("message", "수정되었습니다."));
