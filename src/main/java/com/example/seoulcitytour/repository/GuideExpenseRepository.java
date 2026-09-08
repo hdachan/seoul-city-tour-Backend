@@ -8,4 +8,7 @@ import java.util.List;
 public interface GuideExpenseRepository extends JpaRepository<GuideExpense, Long> {
     List<GuideExpense> findByGuideUsernameAndYearAndMonthOrderByDateAsc(
             String guideUsername, Integer year, Integer month);
+
+    List<GuideExpense> findByGuideUsernameAndYearAndMonth(
+            String guideUsername, Integer year, Integer month);
 }

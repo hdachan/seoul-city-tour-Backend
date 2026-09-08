@@ -29,6 +29,7 @@ public class DevController {
             Map.of("id", "guide-admin", "label", "📂 가이드 정산관리"),
             Map.of("id", "sales-admin", "label", "📊 영업 정산관리"),
             Map.of("id", "guide-form",  "label", "📝 가이드 정산"),
+            Map.of("id", "guide-stats", "label", "📊 내 통계"),
             Map.of("id", "sales",       "label", "💼 영업 정산"),
             Map.of("id", "dmz",         "label", "🗺 DMZ 예약 정보"),
             Map.of("id", "admin",       "label", "👥 계정 관리"),

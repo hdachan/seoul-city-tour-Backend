@@ -409,4 +409,63 @@ public class GuideFormController {
         field.setAccessible(true);
         field.set(obj, value);
     }
+    // ── 통계 ──
+    @GetMapping("/stats")
+    public ResponseEntity<?> getStats(
+            @RequestParam String username,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month) {
+
+        var incomes = incomeRepository.findByGuideUsernameAndYearAndMonth(username,
+                year != null ? year : LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).getYear(),
+                month != null ? month : LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).getMonthValue());
+
+        var expenses = expenseRepository.findByGuideUsernameAndYearAndMonth(username,
+                year != null ? year : LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).getYear(),
+                month != null ? month : LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).getMonthValue());
+
+        // 투어별 통계
+        java.util.Map<String, java.util.Map<String, Object>> tourStats = new java.util.LinkedHashMap<>();
+        for (var i : incomes) {
+            tourStats.computeIfAbsent(i.getTourName(), k -> {
+                java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+                m.put("tourName", k); m.put("count", 0); m.put("totalAdult", 0);
+                m.put("totalChild", 0); m.put("totalInfant", 0); m.put("totalAmount", 0L);
+                return m;
+            });
+            var t = tourStats.get(i.getTourName());
+            t.put("count", (int) t.get("count") + 1);
+            t.put("totalAdult", (int) t.get("totalAdult") + (i.getAdult() != null ? i.getAdult() : 0));
+            t.put("totalChild", (int) t.get("totalChild") + (i.getChild() != null ? i.getChild() : 0));
+            t.put("totalInfant", (int) t.get("totalInfant") + (i.getInfant() != null ? i.getInfant() : 0));
+            t.put("totalAmount", (long) t.get("totalAmount") + (i.getTotalAmount() != null ? i.getTotalAmount() : 0L));
+        }
+
+        // 결제수단별 합계
+        long cashTotal = incomes.stream().filter(i -> "현금".equals(i.getPaymentType()) || "그외-현금".equals(i.getPaymentType()))
+                .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
+        long cardTotal = incomes.stream().filter(i -> "카드".equals(i.getPaymentType()) || "그외-카드".equals(i.getPaymentType()))
+                .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
+        long wanbul = incomes.stream().filter(i -> "완불".equals(i.getPaymentType()))
+                .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
+        long totalIncome = incomes.stream().mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
+        long totalExpense = expenses.stream().mapToLong(e -> e.getTotalAmount() != null ? e.getTotalAmount() : 0L).sum();
+        int totalAdult = incomes.stream().mapToInt(i -> i.getAdult() != null ? i.getAdult() : 0).sum();
+        int totalChild = incomes.stream().mapToInt(i -> i.getChild() != null ? i.getChild() : 0).sum();
+        int totalInfant = incomes.stream().mapToInt(i -> i.getInfant() != null ? i.getInfant() : 0).sum();
+
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("totalTours", incomes.size());
+        result.put("totalAdult", totalAdult);
+        result.put("totalChild", totalChild);
+        result.put("totalInfant", totalInfant);
+        result.put("totalIncome", totalIncome);
+        result.put("cashTotal", cashTotal);
+        result.put("cardTotal", cardTotal);
+        result.put("wanbul", wanbul);
+        result.put("totalExpense", totalExpense);
+        result.put("netIncome", totalIncome - totalExpense);
+        result.put("tourStats", tourStats.values());
+        return ResponseEntity.ok(result);
+    }
 }
