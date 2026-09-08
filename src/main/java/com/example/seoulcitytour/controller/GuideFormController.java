@@ -247,15 +247,19 @@ public class GuideFormController {
         LocalDate now = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
         var list = expenseRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(
                 auth.getName(), now.getYear(), now.getMonthValue());
-        return ResponseEntity.ok(list.stream().map(e -> Map.of(
-                "id",          e.getId(),
-                "expenseType", e.getExpenseType(),
-                "amount",      e.getAmount(),
-                "headcount",   e.getHeadcount() != null ? e.getHeadcount() : 0,
-                "totalAmount", e.getTotalAmount() != null ? e.getTotalAmount() : 0L,
-                "paymentType", e.getPaymentType(),
-                "date",        e.getDate().toString()
-        )).toList());
+        return ResponseEntity.ok(list.stream().map(e -> {
+            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id",          e.getId());
+            m.put("tourName",    e.getTourName() != null ? e.getTourName() : "");
+            m.put("expenseType", e.getExpenseType());
+            m.put("amount",      e.getAmount());
+            m.put("headcount",   e.getHeadcount() != null ? e.getHeadcount() : 0);
+            m.put("totalAmount", e.getTotalAmount() != null ? e.getTotalAmount() : 0L);
+            m.put("paymentType", e.getPaymentType());
+            m.put("memo",        e.getMemo() != null ? e.getMemo() : "");
+            m.put("date",        e.getDate().toString());
+            return m;
+        }).toList());
     }
 
     // ── 지출 추가 ──
@@ -271,11 +275,13 @@ public class GuideFormController {
 
             GuideExpense expense = new GuideExpense();
             setField(expense, "guideUsername", auth.getName());
+            setField(expense, "tourName",      body.getOrDefault("tourName", ""));
             setField(expense, "expenseType",   (String) body.get("expenseType"));
             setField(expense, "amount",        amount);
             setField(expense, "headcount",     headcount);
             setField(expense, "totalAmount",   amount * headcount);
             setField(expense, "paymentType",   (String) body.get("paymentType"));
+            setField(expense, "memo",          body.getOrDefault("memo", ""));
             setField(expense, "date",          date);
             setField(expense, "year",          date.getYear());
             setField(expense, "month",         date.getMonthValue());
@@ -300,11 +306,13 @@ public class GuideFormController {
 
             long amount   = parseL(body, "amount");
             int headcount = parseI(body, "headcount");
+            setField(expense, "tourName",     body.getOrDefault("tourName", ""));
             setField(expense, "expenseType",  (String) body.get("expenseType"));
             setField(expense, "amount",       amount);
             setField(expense, "headcount",    headcount);
             setField(expense, "totalAmount",  amount * headcount);
             setField(expense, "paymentType",  (String) body.get("paymentType"));
+            setField(expense, "memo",         body.getOrDefault("memo", ""));
             expenseRepository.save(expense);
             return ResponseEntity.ok(Map.of("message", "수정되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "수정 실패: " + e.getMessage())); }
