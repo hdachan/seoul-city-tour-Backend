@@ -19,6 +19,9 @@ public class GuideExpense {
     @Column(nullable = false)
     private String guideUsername;
 
+    @Column
+    private String tourName;        // 투어 이름
+
     @Column(nullable = false)
     private String expenseType;     // 북한관수수료 / 가이드입장료
 
@@ -33,6 +36,9 @@ public class GuideExpense {
 
     @Column(nullable = false)
     private String paymentType;     // 현금 / 카드
+
+    @Column
+    private String memo;            // 비고
 
     @Column(nullable = false)
     private LocalDate date;

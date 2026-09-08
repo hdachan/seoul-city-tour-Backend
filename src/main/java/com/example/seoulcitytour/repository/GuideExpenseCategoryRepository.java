@@ -6,5 +6,6 @@ import java.util.List;
 
 public interface GuideExpenseCategoryRepository extends JpaRepository<GuideExpenseCategory, Long> {
     List<GuideExpenseCategory> findByActiveTrueOrderByNameAsc();
-    boolean existsByName(String name);
+    List<GuideExpenseCategory> findByTourNameIdAndActiveTrueOrderByNameAsc(Long tourNameId);
+    boolean existsByNameAndTourNameId(String name, Long tourNameId);
 }

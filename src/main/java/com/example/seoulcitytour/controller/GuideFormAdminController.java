@@ -266,9 +266,12 @@ public class GuideFormAdminController {
 
     // ── 지출 카테고리 조회 ──
     @GetMapping("/expense-categories")
-    public ResponseEntity<?> getExpenseCategories() {
-        return ResponseEntity.ok(expenseCategoryRepository.findByActiveTrueOrderByNameAsc().stream()
-                .map(c -> Map.of("id", c.getId(), "name", c.getName()))
+    public ResponseEntity<?> getExpenseCategories(@RequestParam(required = false) Long tourNameId) {
+        var list = tourNameId != null
+                ? expenseCategoryRepository.findByTourNameIdAndActiveTrueOrderByNameAsc(tourNameId)
+                : expenseCategoryRepository.findByActiveTrueOrderByNameAsc();
+        return ResponseEntity.ok(list.stream()
+                .map(c -> Map.of("id", c.getId(), "name", c.getName(), "tourNameId", c.getTourNameId() != null ? c.getTourNameId() : 0L))
                 .toList());
     }
 
@@ -276,10 +279,13 @@ public class GuideFormAdminController {
     public ResponseEntity<?> addExpenseCategory(@RequestBody Map<String, Object> body) {
         try {
             String name = ((String) body.get("name")).trim();
+            Long tourNameId = body.get("tourNameId") != null ? Long.parseLong(body.get("tourNameId").toString()) : null;
             if (name.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "이름을 입력해주세요."));
-            if (expenseCategoryRepository.existsByName(name)) return ResponseEntity.badRequest().body(Map.of("error", "이미 존재하는 카테고리입니다."));
+            if (tourNameId != null && expenseCategoryRepository.existsByNameAndTourNameId(name, tourNameId))
+                return ResponseEntity.badRequest().body(Map.of("error", "이미 존재하는 카테고리입니다."));
             var cat = new com.example.seoulcitytour.entity.GuideExpenseCategory();
             setField(cat, "name", name);
+            setField(cat, "tourNameId", tourNameId);
             setField(cat, "active", true);
             expenseCategoryRepository.save(cat);
             return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
@@ -299,15 +305,19 @@ public class GuideFormAdminController {
     public ResponseEntity<?> getExpense(@RequestParam String guideUsername,
                                         @RequestParam Integer year, @RequestParam Integer month) {
         var list = expenseRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(guideUsername, year, month);
-        return ResponseEntity.ok(list.stream().map(e -> Map.of(
-                "id",          e.getId(),
-                "expenseType", e.getExpenseType(),
-                "amount",      e.getAmount(),
-                "headcount",   e.getHeadcount() != null ? e.getHeadcount() : 0,
-                "totalAmount", e.getTotalAmount() != null ? e.getTotalAmount() : 0L,
-                "paymentType", e.getPaymentType(),
-                "date",        e.getDate().toString()
-        )).toList());
+        return ResponseEntity.ok(list.stream().map(e -> {
+            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id",          e.getId());
+            m.put("tourName",    e.getTourName() != null ? e.getTourName() : "");
+            m.put("expenseType", e.getExpenseType());
+            m.put("amount",      e.getAmount());
+            m.put("headcount",   e.getHeadcount() != null ? e.getHeadcount() : 0);
+            m.put("totalAmount", e.getTotalAmount() != null ? e.getTotalAmount() : 0L);
+            m.put("paymentType", e.getPaymentType());
+            m.put("memo",        e.getMemo() != null ? e.getMemo() : "");
+            m.put("date",        e.getDate().toString());
+            return m;
+        }).toList());
     }
 
     // ── 지출 추가 ──
@@ -315,20 +325,25 @@ public class GuideFormAdminController {
     public ResponseEntity<?> addExpense(@RequestBody Map<String, Object> body) {
         try {
             String    guideUsername = (String) body.get("guideUsername");
-            LocalDate date          = LocalDate.now();
             long      amount        = parseL(body, "amount");
             int       headcount     = parseI(body, "headcount");
 
+            String dateStr = (String) body.get("date");
+            LocalDate date2 = (dateStr != null && !dateStr.isBlank())
+                    ? LocalDate.parse(dateStr)
+                    : LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
             GuideExpense expense = new GuideExpense();
             setField(expense, "guideUsername", guideUsername);
+            setField(expense, "tourName",      body.getOrDefault("tourName", ""));
             setField(expense, "expenseType",   (String) body.get("expenseType"));
             setField(expense, "amount",        amount);
             setField(expense, "headcount",     headcount);
             setField(expense, "totalAmount",   amount * headcount);
             setField(expense, "paymentType",   (String) body.get("paymentType"));
-            setField(expense, "date",          date);
-            setField(expense, "year",          date.getYear());
-            setField(expense, "month",         date.getMonthValue());
+            setField(expense, "memo",          body.getOrDefault("memo", ""));
+            setField(expense, "date",          date2);
+            setField(expense, "year",          date2.getYear());
+            setField(expense, "month",         date2.getMonthValue());
             setField(expense, "locked",        false);
             expenseRepository.save(expense);
             return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
@@ -342,11 +357,13 @@ public class GuideFormAdminController {
             GuideExpense expense = expenseRepository.findById(id).orElseThrow();
             long amount   = parseL(body, "amount");
             int headcount = parseI(body, "headcount");
+            setField(expense, "tourName",     body.getOrDefault("tourName", ""));
             setField(expense, "expenseType",  (String) body.get("expenseType"));
             setField(expense, "amount",       amount);
             setField(expense, "headcount",    headcount);
             setField(expense, "totalAmount",  amount * headcount);
             setField(expense, "paymentType",  (String) body.get("paymentType"));
+            setField(expense, "memo",         body.getOrDefault("memo", ""));
             expenseRepository.save(expense);
             return ResponseEntity.ok(Map.of("message", "수정되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "수정 실패: " + e.getMessage())); }

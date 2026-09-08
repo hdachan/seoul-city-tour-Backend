@@ -14,8 +14,11 @@ public class GuideExpenseCategory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String name;
+
+    @Column(name = "tour_name_id")
+    private Long tourNameId;   // 연결된 투어 카테고리
 
     @Column(nullable = false)
     private Boolean active = true;

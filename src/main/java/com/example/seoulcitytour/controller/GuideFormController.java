@@ -41,9 +41,12 @@ public class GuideFormController {
 
     // ── 투어이름 ──
     @GetMapping("/expense-categories")
-    public ResponseEntity<?> getExpenseCategories() {
-        return ResponseEntity.ok(expenseCategoryRepository.findByActiveTrueOrderByNameAsc().stream()
-                .map(c -> Map.of("id", c.getId(), "name", c.getName()))
+    public ResponseEntity<?> getExpenseCategories(@RequestParam(required = false) Long tourNameId) {
+        var list = tourNameId != null
+                ? expenseCategoryRepository.findByTourNameIdAndActiveTrueOrderByNameAsc(tourNameId)
+                : expenseCategoryRepository.findByActiveTrueOrderByNameAsc();
+        return ResponseEntity.ok(list.stream()
+                .map(c -> Map.of("id", c.getId(), "name", c.getName(), "tourNameId", c.getTourNameId() != null ? c.getTourNameId() : 0L))
                 .toList());
     }
 
