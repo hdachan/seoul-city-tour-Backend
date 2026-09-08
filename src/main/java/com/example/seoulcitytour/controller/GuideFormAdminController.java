@@ -31,6 +31,7 @@ public class GuideFormAdminController {
     private final GuideDailyFeeRepository  dailyFeeRepository;
     private final GuideMonthLockRepository lockRepository;
     private final TourNameRepository       tourNameRepository;
+    private final com.example.seoulcitytour.repository.GuideExpenseCategoryRepository expenseCategoryRepository;
 
     // ── 가이드 목록 (active=true만) ──
     @GetMapping("/guides")
@@ -244,25 +245,12 @@ public class GuideFormAdminController {
             setField(income, "tourName",           (String) body.get("tourName"));
             setField(income, "representativeName", body.getOrDefault("representativeName", ""));
             setField(income, "paymentType",        payType);
-            setField(income, "note",               body.getOrDefault("note", ""));
-            setField(income, "memo",               body.getOrDefault("memo", ""));
-            if ("완불".equals(payType) || "그외".equals(payType) || payType.startsWith("그외-")) {
-                setField(income, "amount",      0L);
-                setField(income, "childAmount", 0L);
-                setField(income, "headcount",   headcount);
-                setField(income, "adult",       adult);
-                setField(income, "child",       child);
-                setField(income, "infant",      infant);
-                setField(income, "totalAmount", 0L);
-            } else {
-                long totalAmt = amount * adult + childAmount * child;
+            if ("카드".equals(payType) || "현금".equals(payType)) {
                 setField(income, "amount",      amount);
-                setField(income, "childAmount", childAmount);
                 setField(income, "headcount",   headcount);
-                setField(income, "adult",       adult);
-                setField(income, "child",       child);
-                setField(income, "infant",      infant);
-                setField(income, "totalAmount", totalAmt);
+                setField(income, "totalAmount", amount * headcount);
+            } else {
+                setField(income, "amount", 0L); setField(income, "headcount", 0); setField(income, "totalAmount", 0L);
             }
             incomeRepository.save(income);
             return ResponseEntity.ok(Map.of("message", "수정되었습니다."));
@@ -274,6 +262,36 @@ public class GuideFormAdminController {
     public ResponseEntity<?> deleteIncome(@PathVariable Long id) {
         incomeRepository.deleteById(id);
         return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
+    }
+
+    // ── 지출 카테고리 조회 ──
+    @GetMapping("/expense-categories")
+    public ResponseEntity<?> getExpenseCategories() {
+        return ResponseEntity.ok(expenseCategoryRepository.findByActiveTrueOrderByNameAsc().stream()
+                .map(c -> Map.of("id", c.getId(), "name", c.getName()))
+                .toList());
+    }
+
+    @PostMapping("/expense-categories")
+    public ResponseEntity<?> addExpenseCategory(@RequestBody Map<String, Object> body) {
+        try {
+            String name = ((String) body.get("name")).trim();
+            if (name.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "이름을 입력해주세요."));
+            if (expenseCategoryRepository.existsByName(name)) return ResponseEntity.badRequest().body(Map.of("error", "이미 존재하는 카테고리입니다."));
+            var cat = new com.example.seoulcitytour.entity.GuideExpenseCategory();
+            setField(cat, "name", name);
+            setField(cat, "active", true);
+            expenseCategoryRepository.save(cat);
+            return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+    }
+
+    @DeleteMapping("/expense-categories/{id}")
+    public ResponseEntity<?> deleteExpenseCategory(@PathVariable Long id) {
+        try {
+            expenseCategoryRepository.deleteById(id);
+            return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
     // ── 지출 조회 ──

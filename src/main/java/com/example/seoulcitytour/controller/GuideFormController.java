@@ -29,6 +29,7 @@ public class GuideFormController {
     private final GuideExpenseRepository   expenseRepository;
     private final GuideDailyFeeRepository  dailyFeeRepository;
     private final TourNameRepository       tourNameRepository;
+    private final com.example.seoulcitytour.repository.GuideExpenseCategoryRepository expenseCategoryRepository;
     private final GuideMonthLockRepository lockRepository;
 
     private boolean isMonthLocked(String guideUsername) {
@@ -39,6 +40,13 @@ public class GuideFormController {
     }
 
     // ── 투어이름 ──
+    @GetMapping("/expense-categories")
+    public ResponseEntity<?> getExpenseCategories() {
+        return ResponseEntity.ok(expenseCategoryRepository.findByActiveTrueOrderByNameAsc().stream()
+                .map(c -> Map.of("id", c.getId(), "name", c.getName()))
+                .toList());
+    }
+
     @GetMapping("/tour-names")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form') " +
             "or @tabPermissionService.hasAccess(authentication, 'guide-admin')")
