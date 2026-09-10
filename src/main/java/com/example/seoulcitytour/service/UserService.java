@@ -26,6 +26,9 @@ public class UserService {
 
     // 계정 생성
     public User createUser(String username, String password, String role, String name) {
+        // 소문자로 통일
+        final String normalizedUsername = username.toLowerCase();
+
         // ADMIN, DEV 는 생성 불가
         if ("ROLE_ADMIN".equals(role) || "ROLE_DEV".equals(role))
             throw new IllegalArgumentException("생성할 수 없는 역할입니다: " + role);
@@ -35,13 +38,13 @@ public class UserService {
             throw new IllegalArgumentException("존재하지 않는 역할입니다: " + role);
 
         // 같은 username 중복 체크
-        userRepository.findByUsername(username).ifPresent(u -> {
-            if (u.getActive()) throw new IllegalArgumentException("이미 존재하는 아이디입니다: " + username);
+        userRepository.findByUsername(normalizedUsername).ifPresent(u -> {
+            if (u.getActive()) throw new IllegalArgumentException("이미 존재하는 아이디입니다: " + normalizedUsername);
         });
 
         User user = new User();
         try {
-            setField(user, "username", username);
+            setField(user, "username", normalizedUsername);
             setField(user, "password", passwordEncoder.encode(password));
             setField(user, "role",     role);
             setField(user, "name",     name);
