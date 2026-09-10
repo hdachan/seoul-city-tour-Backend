@@ -245,12 +245,25 @@ public class GuideFormAdminController {
             setField(income, "tourName",           (String) body.get("tourName"));
             setField(income, "representativeName", body.getOrDefault("representativeName", ""));
             setField(income, "paymentType",        payType);
-            if ("카드".equals(payType) || "현금".equals(payType)) {
-                setField(income, "amount",      amount);
+            setField(income, "note",               body.getOrDefault("note", ""));
+            setField(income, "memo",               body.getOrDefault("memo", ""));
+            if ("완불".equals(payType) || "그외".equals(payType) || payType.startsWith("그외-")) {
+                setField(income, "amount",      0L);
+                setField(income, "childAmount", 0L);
                 setField(income, "headcount",   headcount);
-                setField(income, "totalAmount", amount * headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", 0L);
             } else {
-                setField(income, "amount", 0L); setField(income, "headcount", 0); setField(income, "totalAmount", 0L);
+                long totalAmt = amount * adult + childAmount * child;
+                setField(income, "amount",      amount);
+                setField(income, "childAmount", childAmount);
+                setField(income, "headcount",   headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", totalAmt);
             }
             incomeRepository.save(income);
             return ResponseEntity.ok(Map.of("message", "수정되었습니다."));
