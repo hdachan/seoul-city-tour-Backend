@@ -479,6 +479,28 @@ public class GuideFormController {
         int totalChild = incomes.stream().mapToInt(i -> i.getChild() != null ? i.getChild() : 0).sum();
         int totalInfant = incomes.stream().mapToInt(i -> i.getInfant() != null ? i.getInfant() : 0).sum();
 
+        // 일비 목록
+        int y2 = year != null ? year : LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).getYear();
+        int m2 = month != null ? month : LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).getMonthValue();
+        var dailyFees = dailyFeeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(username, y2, m2);
+        var dailyFeeList = dailyFees.stream().map(d -> java.util.Map.of(
+                "date", d.getDate().toString(),
+                "amount", d.getAmount()
+        )).toList();
+
+        // 지출 목록
+        var expenseList = expenses.stream().map(e -> {
+            java.util.Map<String, Object> em = new java.util.LinkedHashMap<>();
+            em.put("date",        e.getDate().toString());
+            em.put("tourName",    e.getTourName() != null ? e.getTourName() : "");
+            em.put("expenseType", e.getExpenseType());
+            em.put("paymentType", e.getPaymentType());
+            em.put("amount",      e.getAmount() != null ? e.getAmount() : 0L);
+            em.put("headcount",   e.getHeadcount() != null ? e.getHeadcount() : 0);
+            em.put("totalAmount", e.getTotalAmount() != null ? e.getTotalAmount() : 0L);
+            return em;
+        }).toList();
+
         java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("totalTours", incomes.size());
         result.put("totalAdult", totalAdult);
@@ -491,6 +513,8 @@ public class GuideFormController {
         result.put("totalExpense", totalExpense);
         result.put("netIncome", totalIncome - totalExpense);
         result.put("tourStats", tourStats.values());
+        result.put("dailyFees", dailyFeeList);
+        result.put("expenseList", expenseList);
         return ResponseEntity.ok(result);
     }
 }
