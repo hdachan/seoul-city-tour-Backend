@@ -501,4 +501,67 @@ public class GuideFormAdminController {
 
         return ResponseEntity.ok(result);
     }
+
+    // ── 날짜별 통계 ──
+    @GetMapping("/stats/daily")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('DEV')")
+    public ResponseEntity<?> getDailyStats(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month) {
+
+        LocalDate now = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+        int y = year != null ? year : now.getYear();
+        int m = month != null ? month : now.getMonthValue();
+
+        // 해당 월 모든 가이드의 수입/지출 조회
+        var allIncomes = incomeRepository.findAll().stream()
+                .filter(i -> i.getYear() == y && i.getMonth() == m)
+                .toList();
+        var allExpenses = expenseRepository.findAll().stream()
+                .filter(e -> e.getYear() == y && e.getMonth() == m)
+                .toList();
+
+        // 날짜별 그룹핑
+        java.util.Map<String, java.util.Map<String, Object>> byDate = new java.util.TreeMap<>();
+
+        for (var i : allIncomes) {
+            String date = i.getDate().toString();
+            byDate.computeIfAbsent(date, k -> {
+                java.util.Map<String, Object> d = new java.util.LinkedHashMap<>();
+                d.put("date", k); d.put("cashIncome", 0L); d.put("cardIncome", 0L); d.put("expense", 0L);
+                return d;
+            });
+            var d = byDate.get(date);
+            String pt = i.getPaymentType();
+            long amt = i.getTotalAmount() != null ? i.getTotalAmount() : 0L;
+            if ("현금".equals(pt) || "그외-현금".equals(pt))
+                d.put("cashIncome", (long) d.get("cashIncome") + amt);
+            else if ("카드".equals(pt) || "그외-카드".equals(pt))
+                d.put("cardIncome", (long) d.get("cardIncome") + amt);
+        }
+
+        for (var e : allExpenses) {
+            String date = e.getDate().toString();
+            byDate.computeIfAbsent(date, k -> {
+                java.util.Map<String, Object> d = new java.util.LinkedHashMap<>();
+                d.put("date", k); d.put("cashIncome", 0L); d.put("cardIncome", 0L); d.put("expense", 0L);
+                return d;
+            });
+            var d = byDate.get(date);
+            long amt = e.getTotalAmount() != null ? e.getTotalAmount() : 0L;
+            d.put("expense", (long) d.get("expense") + amt);
+        }
+
+        var result = byDate.values().stream().map(d -> {
+            long cashIncome = (long) d.get("cashIncome");
+            long cardIncome = (long) d.get("cardIncome");
+            long expense    = (long) d.get("expense");
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<>(d);
+            row.put("total",   cashIncome + cardIncome - expense);
+            row.put("cashNet", cashIncome - expense);
+            return row;
+        }).toList();
+
+        return ResponseEntity.ok(result);
+    }
 }
