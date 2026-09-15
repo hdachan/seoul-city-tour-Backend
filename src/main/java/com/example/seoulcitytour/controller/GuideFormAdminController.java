@@ -455,4 +455,50 @@ public class GuideFormAdminController {
         field.setAccessible(true);
         field.set(obj, value);
     }
+    // ── 어드민 통계 ──
+    @GetMapping("/stats")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('DEV')")
+    public ResponseEntity<?> getAdminStats(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month) {
+
+        LocalDate now = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+        int y = year != null ? year : now.getYear();
+        int m = month != null ? month : now.getMonthValue();
+
+        var guides = userRepository.findByActiveTrueOrderByNameAsc().stream()
+                .filter(u -> "ROLE_GUIDE".equals(u.getRole()))
+                .toList();
+
+        var result = guides.stream().map(g -> {
+            // 일비
+            long totalDailyFee = dailyFeeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), y, m)
+                    .stream().mapToLong(d -> d.getAmount() != null ? d.getAmount() : 0L).sum();
+            long tax = Math.round(totalDailyFee * 0.033);
+            long actualDailyFee = totalDailyFee - tax;
+
+            // 현금 수입
+            long cashIncome = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), y, m)
+                    .stream().filter(i -> "현금".equals(i.getPaymentType()) || "그외-현금".equals(i.getPaymentType()))
+                    .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
+
+            // 현금 지출
+            long cashExpense = expenseRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), y, m)
+                    .stream().filter(e -> "현금".equals(e.getPaymentType()))
+                    .mapToLong(e -> e.getTotalAmount() != null ? e.getTotalAmount() : 0L).sum();
+
+            long tourNet = cashIncome - cashExpense;
+
+            java.util.Map<String, Object> map = new java.util.LinkedHashMap<>();
+            map.put("name",         g.getName());
+            map.put("username",     g.getUsername());
+            map.put("dailyFee",     totalDailyFee);
+            map.put("tax",          tax);
+            map.put("actualDailyFee", actualDailyFee);
+            map.put("tourNet",      tourNet);
+            return map;
+        }).toList();
+
+        return ResponseEntity.ok(result);
+    }
 }

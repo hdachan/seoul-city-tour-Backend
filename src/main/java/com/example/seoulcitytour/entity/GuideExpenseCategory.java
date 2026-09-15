@@ -5,7 +5,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "guide_expense_category")
+@Table(name = "guide_expense_category",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"name", "tour_name_id"}))
 @Getter
 @NoArgsConstructor
 public class GuideExpenseCategory {
@@ -18,7 +19,7 @@ public class GuideExpenseCategory {
     private String name;
 
     @Column(name = "tour_name_id")
-    private Long tourNameId;   // 연결된 투어 카테고리
+    private Long tourNameId;
 
     @Column(nullable = false)
     private Boolean active = true;
