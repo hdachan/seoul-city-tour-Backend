@@ -164,6 +164,8 @@ public class GuideFormAdminController {
             m.put("note",               i.getNote() != null ? i.getNote() : "");
             m.put("memo",               i.getMemo() != null ? i.getMemo() : "");
             m.put("paymentType",        i.getPaymentType());
+            m.put("cashAmount",         i.getCashAmount() != null ? i.getCashAmount() : 0L);
+            m.put("cardAmount",         i.getCardAmount() != null ? i.getCardAmount() : 0L);
             m.put("date",               i.getDate().toString());
             return m;
         }).toList());
@@ -199,7 +201,19 @@ public class GuideFormAdminController {
             setField(income, "locked",             false);
             setField(income, "note",               body.getOrDefault("note", ""));
             setField(income, "memo",               body.getOrDefault("memo", ""));
-            if ("완불".equals(payType) || "그외".equals(payType) || payType.startsWith("그외-")) {
+            if ("그외-교차".equals(payType)) {
+                long cashAmt = parseL(body, "cashAmount");
+                long cardAmt = parseL(body, "cardAmount");
+                setField(income, "cashAmount",  cashAmt);
+                setField(income, "cardAmount",  cardAmt);
+                setField(income, "amount",      0L);
+                setField(income, "childAmount", 0L);
+                setField(income, "headcount",   headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", cashAmt + cardAmt);
+            } else if ("완불".equals(payType) || "그외".equals(payType) || payType.startsWith("그외-")) {
                 setField(income, "amount",      0L);
                 setField(income, "childAmount", 0L);
                 setField(income, "headcount",   headcount);
@@ -247,7 +261,19 @@ public class GuideFormAdminController {
             setField(income, "paymentType",        payType);
             setField(income, "note",               body.getOrDefault("note", ""));
             setField(income, "memo",               body.getOrDefault("memo", ""));
-            if ("완불".equals(payType) || "그외".equals(payType) || payType.startsWith("그외-")) {
+            if ("그외-교차".equals(payType)) {
+                long cashAmt = parseL(body, "cashAmount");
+                long cardAmt = parseL(body, "cardAmount");
+                setField(income, "cashAmount",  cashAmt);
+                setField(income, "cardAmount",  cardAmt);
+                setField(income, "amount",      0L);
+                setField(income, "childAmount", 0L);
+                setField(income, "headcount",   headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", cashAmt + cardAmt);
+            } else if ("완불".equals(payType) || "그외".equals(payType) || payType.startsWith("그외-")) {
                 setField(income, "amount",      0L);
                 setField(income, "childAmount", 0L);
                 setField(income, "headcount",   headcount);

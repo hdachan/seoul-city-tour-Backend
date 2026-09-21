@@ -121,6 +121,8 @@ public class GuideFormController {
             m.put("note",               i.getNote() != null ? i.getNote() : "");
             m.put("memo",               i.getMemo() != null ? i.getMemo() : "");
             m.put("paymentType",        i.getPaymentType());
+            m.put("cashAmount",         i.getCashAmount() != null ? i.getCashAmount() : 0L);
+            m.put("cardAmount",         i.getCardAmount() != null ? i.getCardAmount() : 0L);
             m.put("date",               i.getDate() != null ? i.getDate().toString() : "");
             return m;
         }).toList());
@@ -158,7 +160,19 @@ public class GuideFormController {
             int  infant      = parseI(body, "infant");
             if (adult > 0 || child > 0 || infant > 0) headcount = adult + child + infant;
 
-            if ("완불".equals(payType) || "그외".equals(payType)) {
+            if ("그외-교차".equals(payType)) {
+                long cashAmt = parseL(body, "cashAmount");
+                long cardAmt = parseL(body, "cardAmount");
+                setField(income, "cashAmount",  cashAmt);
+                setField(income, "cardAmount",  cardAmt);
+                setField(income, "amount",      0L);
+                setField(income, "headcount",   headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "childAmount", childAmount);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", cashAmt + cardAmt);
+            } else if ("완불".equals(payType) || "그외".equals(payType)) {
                 setField(income, "amount",      0L);
                 setField(income, "headcount",   headcount);
                 setField(income, "adult",       adult);
@@ -215,7 +229,19 @@ public class GuideFormController {
             setField(income, "tourName",           (String) body.get("tourName"));
             setField(income, "representativeName", body.getOrDefault("representativeName", ""));
             setField(income, "paymentType",        payType);
-            if ("완불".equals(payType) || "그외".equals(payType)) {
+            if ("그외-교차".equals(payType)) {
+                long cashAmt = parseL(body, "cashAmount");
+                long cardAmt = parseL(body, "cardAmount");
+                setField(income, "cashAmount",  cashAmt);
+                setField(income, "cardAmount",  cardAmt);
+                setField(income, "amount",      0L);
+                setField(income, "headcount",   headcount);
+                setField(income, "adult",       adult);
+                setField(income, "child",       child);
+                setField(income, "childAmount", childAmount);
+                setField(income, "infant",      infant);
+                setField(income, "totalAmount", cashAmt + cardAmt);
+            } else if ("완불".equals(payType) || "그외".equals(payType)) {
                 setField(income, "amount",      0L);
                 setField(income, "headcount",   headcount);
                 setField(income, "adult",       adult);
@@ -474,9 +500,13 @@ public class GuideFormController {
 
         // 결제수단별 합계
         long cashTotal = incomes.stream().filter(i -> "현금".equals(i.getPaymentType()) || "그외-현금".equals(i.getPaymentType()))
-                .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
+                .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum()
+                + incomes.stream().filter(i -> "그외-교차".equals(i.getPaymentType()))
+                .mapToLong(i -> i.getCashAmount() != null ? i.getCashAmount() : 0L).sum();
         long cardTotal = incomes.stream().filter(i -> "카드".equals(i.getPaymentType()) || "그외-카드".equals(i.getPaymentType()))
-                .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
+                .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum()
+                + incomes.stream().filter(i -> "그외-교차".equals(i.getPaymentType()))
+                .mapToLong(i -> i.getCardAmount() != null ? i.getCardAmount() : 0L).sum();
         long wanbul = incomes.stream().filter(i -> "완불".equals(i.getPaymentType()))
                 .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
         long totalIncome = incomes.stream().mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();

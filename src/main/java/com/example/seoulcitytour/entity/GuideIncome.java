@@ -26,7 +26,7 @@ public class GuideIncome {
     private String representativeName;
 
     @Column
-    private Long amount;            // 1인 금액
+    private Long amount;            // 1인 금액 (현금)
 
     @Column
     private Integer headcount;      // 총 인원 (기존 호환)
@@ -44,16 +44,22 @@ public class GuideIncome {
     private Integer infant;         // 유아 인원
 
     @Column
-    private Long totalAmount;       // 합계 (금액 × 인원)
+    private Long totalAmount;       // 합계
+
+    @Column
+    private Long cashAmount;        // 그외-교차 현금 금액
+
+    @Column
+    private Long cardAmount;        // 그외-교차 카드 금액
 
     @Column(nullable = false)
-    private String paymentType;     // 현금 / 카드 / 그외 / 완불
+    private String paymentType;     // 현금 / 카드 / 그외 / 완불 / 그외-교차
 
     @Column
-    private String note;            // 항목 선택 (북한관 입장료 등)
+    private String note;            // 항목 선택
 
     @Column
-    private String memo;            // 비고 자유 입력
+    private String memo;            // 비고
 
     @Column(nullable = false)
     private LocalDate date;
