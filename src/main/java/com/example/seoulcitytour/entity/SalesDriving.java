@@ -22,7 +22,7 @@ public class SalesDriving {
     @Column(nullable = false)
     private LocalDate date;
 
-    // "업무" / "주유" / "휴가"
+    // "업무" / "주유" / "개인주유" / "개인사용"
     @Column(nullable = false)
     private String type = "업무";
 
@@ -34,7 +34,7 @@ public class SalesDriving {
     @Column
     private String arrivalTime;
 
-    // 미터기값 (오늘 계량기 숫자)
+    // 미터기값 (오늘 계량기 숫자) - 업무 / 개인사용
     // 운행거리는 프론트에서 미터기 기준으로 계산
     @Column
     private Integer meterReading;
@@ -43,15 +43,15 @@ public class SalesDriving {
     @Column
     private String purpose;
 
-    // 주유량 (L) - 주유시만
+    // 주유량 (L) - 주유 / 개인주유
     @Column
     private Double fuelAmount;
 
-    // 주유금액 (원) - 주유시만
+    // 주유금액 (원) - 주유 / 개인주유
     @Column
     private Long fuelCost;
 
-    // 단가 (원/L) - 주유시만
+    // 단가 (원/L) - 주유 / 개인주유
     @Column
     private Integer fuelUnitPrice;
 

@@ -54,23 +54,34 @@ public class SalesAdminController {
             boolean locked = false;
 
             // 미터기 기반 운행거리 계산 (전월 마지막 미터기 포함)
+            // 날짜 → 미터기 순 (시간 없는 개인사용도 순서가 맞도록)
             var sorted = driving.stream()
                     .filter(d -> d.getMeterReading() != null && d.getMeterReading() > 0)
                     .sorted(java.util.Comparator.comparing(com.example.seoulcitytour.entity.SalesDriving::getDate)
-                            .thenComparing(d -> d.getArrivalTime() != null ? d.getArrivalTime() : ""))
+                            .thenComparing(com.example.seoulcitytour.entity.SalesDriving::getMeterReading))
                     .toList();
             // 이번 달 첫 날 이전 마지막 미터기 가져오기
             java.time.LocalDate firstDay = java.time.LocalDate.of(year, month, 1);
             var prevList = drivingRepository.findPrevMeterReadings(u.getUsername(), firstDay);
-            long totalDist = 0;
+            long totalDist = 0, workDist = 0, personalDist = 0;
             int lastMeter = prevList.isEmpty() ? 0 : (prevList.get(0).getMeterReading() != null ? prevList.get(0).getMeterReading() : 0);
             for (var d : sorted) {
                 int m = d.getMeterReading();
-                if (lastMeter > 0 && m > lastMeter) totalDist += (m - lastMeter);
-                lastMeter = m;
+                if (lastMeter > 0 && m > lastMeter) {
+                    long seg = m - lastMeter;
+                    totalDist += seg;
+                    // 구간 거리는 뒤쪽 기록의 구분에 붙임
+                    if ("개인사용".equals(d.getType())) personalDist += seg;
+                    else workDist += seg;
+                }
+                lastMeter = Math.max(lastMeter, m);
             }
             double totalFuelL = driving.stream().mapToDouble(d -> d.getFuelAmount() != null ? d.getFuelAmount() : 0).sum();
             long   totalFuelC = driving.stream().mapToLong(d -> d.getFuelCost() != null ? d.getFuelCost() : 0).sum();
+            double personalFuelL = driving.stream().filter(d -> "개인주유".equals(d.getType()))
+                    .mapToDouble(d -> d.getFuelAmount() != null ? d.getFuelAmount() : 0).sum();
+            long   personalFuelC = driving.stream().filter(d -> "개인주유".equals(d.getType()))
+                    .mapToLong(d -> d.getFuelCost() != null ? d.getFuelCost() : 0).sum();
             String avgKmL = totalFuelL > 0 ? String.format("%.1f", totalDist / totalFuelL) : "-";
 
             var m = new java.util.LinkedHashMap<String, Object>();
@@ -82,6 +93,12 @@ public class SalesAdminController {
             m.put("hasData",      (receiptCount + drivingCount) > 0);
             m.put("locked",       locked);
             m.put("totalDist",    totalDist);
+            m.put("workDist",     workDist);
+            m.put("personalDist", personalDist);
+            m.put("companyFuelL", totalFuelL - personalFuelL);
+            m.put("companyFuelC", totalFuelC - personalFuelC);
+            m.put("personalFuelL", personalFuelL);
+            m.put("personalFuelC", personalFuelC);
             m.put("totalFuelL",   totalFuelL);
             m.put("totalFuelC",   totalFuelC);
             m.put("avgKmL",       avgKmL);
@@ -274,6 +291,7 @@ public class SalesAdminController {
 
             Integer newMeter = body.get("meterReading") != null && !body.get("meterReading").toString().isBlank()
                     ? Integer.parseInt(body.get("meterReading").toString()) : null;
+            if ("개인주유".equals(body.get("type"))) newMeter = null; // 개인주유는 미터기 검사 제외
             Long lastSavedId = null;
 
             LocalDate cur = startDate;
@@ -288,6 +306,9 @@ public class SalesAdminController {
                         return ResponseEntity.badRequest().body(Map.of("error",
                                 "이미 더 높은 미터기 값(" + maxExisting + "km)이 존재합니다. 입력값: " + newMeter + "km"));
                     }
+                    String rangeError = validateMeterRange(salesUsername, cur, newMeter, null);
+                    if (rangeError != null)
+                        return ResponseEntity.badRequest().body(Map.of("error", rangeError));
                 }
                 SalesDriving d = new SalesDriving();
                 saveDriving(d, body, salesUsername, cur);
@@ -305,6 +326,12 @@ public class SalesAdminController {
         try {
             SalesDriving d = drivingRepository.findById(id).orElseThrow();
             LocalDate date = LocalDate.parse((String) body.get("date"));
+            Integer newMeter = body.get("meterReading") != null && !body.get("meterReading").toString().isBlank()
+                    ? Integer.parseInt(body.get("meterReading").toString()) : null;
+            if ("개인주유".equals(body.get("type"))) newMeter = null;
+            String rangeError = validateMeterRange(d.getSalesUsername(), date, newMeter, d.getId());
+            if (rangeError != null)
+                return ResponseEntity.badRequest().body(Map.of("error", rangeError));
             saveDriving(d, body, d.getSalesUsername(), date);
             drivingRepository.save(d);
             return ResponseEntity.ok(Map.of("message", "수정되었습니다.", "id", d.getId()));
@@ -394,19 +421,55 @@ public class SalesAdminController {
     }
 
     // ── 헬퍼 ──
+    // 미터기 범위 검증: 이전 날짜 최대값 이상, 이후 날짜 최소값 이하
+    // excludeId: 수정 시 자기 자신 제외
+    private String validateMeterRange(String username, LocalDate date, Integer meter, Long excludeId) {
+        if (meter == null || meter <= 0) return null;
+
+        int lower = drivingRepository
+                .findBySalesUsernameAndDateBeforeAndMeterReadingIsNotNullOrderByMeterReadingDesc(username, date)
+                .stream()
+                .filter(x -> excludeId == null || !x.getId().equals(excludeId))
+                .mapToInt(x -> x.getMeterReading())
+                .filter(m -> m > 0)
+                .max().orElse(0);
+        if (lower > 0 && meter < lower)
+            return "이전 날짜 미터기(" + lower + "km)보다 작을 수 없습니다. 입력값: " + meter + "km";
+
+        int upper = drivingRepository
+                .findBySalesUsernameAndDateAfterAndMeterReadingIsNotNullOrderByMeterReadingAsc(username, date)
+                .stream()
+                .filter(x -> excludeId == null || !x.getId().equals(excludeId))
+                .mapToInt(x -> x.getMeterReading())
+                .filter(m -> m > 0)
+                .min().orElse(0);
+        if (upper > 0 && meter > upper)
+            return "이후 날짜 미터기(" + upper + "km)보다 클 수 없습니다. 입력값: " + meter + "km";
+
+        return null;
+    }
+
     private void saveDriving(SalesDriving d, Map<String, Object> body, String username, LocalDate date) throws Exception {
+        String type = (String) body.getOrDefault("type", "업무");
+        if (!java.util.Set.of("업무", "주유", "개인주유", "개인사용").contains(type))
+            throw new IllegalArgumentException("알 수 없는 구분입니다: " + type);
+
         Integer meter = body.get("meterReading") != null && !body.get("meterReading").toString().isBlank()
                 ? Integer.parseInt(body.get("meterReading").toString()) : null;
+        boolean hasFuel  = "주유".equals(type) || "개인주유".equals(type);
+        boolean isWork   = "업무".equals(type);
+        if ("개인주유".equals(type)) meter = null; // 개인주유는 미터기 없음
+
         setField(d, "salesUsername", username);
         setField(d, "date",          date);
-        setField(d, "type",          body.getOrDefault("type", "업무"));
-        setField(d, "destination",   body.getOrDefault("destination", ""));
-        setField(d, "arrivalTime",   body.getOrDefault("arrivalTime", ""));
+        setField(d, "type",          type);
+        setField(d, "destination",   isWork ? body.getOrDefault("destination", "") : "");
+        setField(d, "arrivalTime",   isWork || "주유".equals(type) ? body.getOrDefault("arrivalTime", "") : "");
         setField(d, "meterReading",  meter);
-        setField(d, "purpose",       body.getOrDefault("purpose", ""));
-        setField(d, "fuelAmount",    parseDouble(body, "fuelAmount"));
-        setField(d, "fuelCost",      parseL(body, "fuelCost"));
-        setField(d, "fuelUnitPrice", parseI(body, "fuelUnitPrice"));
+        setField(d, "purpose",       isWork ? body.getOrDefault("purpose", "") : "");
+        setField(d, "fuelAmount",    hasFuel ? parseDouble(body, "fuelAmount") : 0.0);
+        setField(d, "fuelCost",      hasFuel ? parseL(body, "fuelCost") : 0L);
+        setField(d, "fuelUnitPrice", hasFuel ? parseI(body, "fuelUnitPrice") : 0);
         setField(d, "note",          body.getOrDefault("note", ""));
         setField(d, "year",          date.getYear());
         setField(d, "month",         date.getMonthValue());

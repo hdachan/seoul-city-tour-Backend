@@ -56,4 +56,12 @@ public interface SalesDrivingRepository extends JpaRepository<SalesDriving, Long
             @Param("username") String username,
             @Param("year") Integer year,
             @Param("month") Integer month);
+
+    // 미터기 범위 검증용 - 선택 날짜 이전 기록 (큰 값부터)
+    List<SalesDriving> findBySalesUsernameAndDateBeforeAndMeterReadingIsNotNullOrderByMeterReadingDesc(
+            String salesUsername, LocalDate date);
+
+    // 미터기 범위 검증용 - 선택 날짜 이후 기록 (작은 값부터)
+    List<SalesDriving> findBySalesUsernameAndDateAfterAndMeterReadingIsNotNullOrderByMeterReadingAsc(
+            String salesUsername, LocalDate date);
 }

@@ -273,7 +273,7 @@ public class SalesFormController {
                 if (isLocked(auth.getName(), date))
                     continue; // 잠긴 주는 건너뜀
 
-                // 미터기 중복/역주행 체크 (업무/휴가 타입이고 미터기 있을 때만)
+                // 미터기 중복/역주행 체크 (미터기 있을 때만)
                 if (newMeter != null) {
                     var existing = drivingRepository.findBySalesUsernameAndDateOrderByIdAsc(auth.getName(), date);
                     int maxExisting = existing.stream()
@@ -283,6 +283,9 @@ public class SalesFormController {
                         return ResponseEntity.badRequest().body(Map.of("error",
                                 "이미 더 높은 미터기 값(" + maxExisting + "km)이 존재합니다. 입력값: " + newMeter + "km"));
                     }
+                    String rangeError = validateMeterRange(auth.getName(), date, newMeter, null);
+                    if (rangeError != null)
+                        return ResponseEntity.badRequest().body(Map.of("error", rangeError));
                 }
 
                 SalesDriving d = new SalesDriving();
@@ -312,6 +315,12 @@ public class SalesFormController {
 
             if (isLocked(auth.getName(), date))
                 return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
+
+            Integer newMeter = body.get("meterReading") != null && !body.get("meterReading").toString().isBlank()
+                    ? Integer.parseInt(body.get("meterReading").toString()) : null;
+            String rangeError = validateMeterRange(auth.getName(), date, newMeter, d.getId());
+            if (rangeError != null)
+                return ResponseEntity.badRequest().body(Map.of("error", rangeError));
 
             saveDriving(d, body, auth.getName(), date);
             drivingRepository.save(d);
@@ -397,11 +406,43 @@ public class SalesFormController {
     // 헬퍼
     // ────────────────────────────────────────
 
+    // 미터기 범위 검증: 이전 날짜 최대값 이상, 이후 날짜 최소값 이하
+    // excludeId: 수정 시 자기 자신 제외
+    private String validateMeterRange(String username, LocalDate date, Integer meter, Long excludeId) {
+        if (meter == null || meter <= 0) return null;
+
+        int lower = drivingRepository
+                .findBySalesUsernameAndDateBeforeAndMeterReadingIsNotNullOrderByMeterReadingDesc(username, date)
+                .stream()
+                .filter(x -> excludeId == null || !x.getId().equals(excludeId))
+                .mapToInt(x -> x.getMeterReading())
+                .filter(m -> m > 0)
+                .max().orElse(0);
+        if (lower > 0 && meter < lower)
+            return "이전 날짜 미터기(" + lower + "km)보다 작을 수 없습니다. 입력값: " + meter + "km";
+
+        int upper = drivingRepository
+                .findBySalesUsernameAndDateAfterAndMeterReadingIsNotNullOrderByMeterReadingAsc(username, date)
+                .stream()
+                .filter(x -> excludeId == null || !x.getId().equals(excludeId))
+                .mapToInt(x -> x.getMeterReading())
+                .filter(m -> m > 0)
+                .min().orElse(0);
+        if (upper > 0 && meter > upper)
+            return "이후 날짜 미터기(" + upper + "km)보다 클 수 없습니다. 입력값: " + meter + "km";
+
+        return null;
+    }
+
     private void saveDriving(SalesDriving d, Map<String, Object> body, String username, LocalDate date) throws Exception {
         String type = (String) body.getOrDefault("type", "업무");
 
+        if (!java.util.Set.of("업무", "주유", "개인주유", "개인사용").contains(type))
+            throw new IllegalArgumentException("알 수 없는 구분입니다: " + type);
+
         Integer meter = body.get("meterReading") != null && !body.get("meterReading").toString().isBlank()
                 ? Integer.parseInt(body.get("meterReading").toString()) : null;
+        if ("개인주유".equals(type)) meter = null; // 개인주유는 미터기 없음
 
         setField(d, "salesUsername", username);
         setField(d, "date",         date);
@@ -425,13 +466,20 @@ public class SalesFormController {
             setField(d, "fuelAmount",    parseDouble(body, "fuelAmount"));
             setField(d, "fuelCost",      parseL(body, "fuelCost"));
             setField(d, "fuelUnitPrice", parseI(body, "fuelUnitPrice"));
-        } else { // 휴가
+        } else if ("개인주유".equals(type)) {
             setField(d, "destination",   "");
             setField(d, "arrivalTime",   "");
-            setField(d, "purpose",       body.getOrDefault("purpose", ""));
+            setField(d, "purpose",       "");
             setField(d, "fuelAmount",    parseDouble(body, "fuelAmount"));
             setField(d, "fuelCost",      parseL(body, "fuelCost"));
             setField(d, "fuelUnitPrice", parseI(body, "fuelUnitPrice"));
+        } else { // 개인사용 - 미터기만
+            setField(d, "destination",   "");
+            setField(d, "arrivalTime",   "");
+            setField(d, "purpose",       "");
+            setField(d, "fuelAmount",    0.0);
+            setField(d, "fuelCost",      0L);
+            setField(d, "fuelUnitPrice", 0);
         }
     }
 
