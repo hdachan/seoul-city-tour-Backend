@@ -464,6 +464,7 @@ public class SalesAdminController {
         setField(d, "date",          date);
         setField(d, "type",          type);
         setField(d, "destination",   isWork ? body.getOrDefault("destination", "") : "");
+        setField(d, "departureTime", isWork ? body.getOrDefault("departureTime", "") : "");
         setField(d, "arrivalTime",   isWork || "주유".equals(type) ? body.getOrDefault("arrivalTime", "") : "");
         setField(d, "meterReading",  meter);
         setField(d, "purpose",       isWork ? body.getOrDefault("purpose", "") : "");
@@ -501,6 +502,7 @@ public class SalesAdminController {
         m.put("date",          d.getDate().toString());
         m.put("type",          d.getType() != null ? d.getType() : "업무");
         m.put("destination",   d.getDestination() != null ? d.getDestination() : "");
+        m.put("departureTime", d.getDepartureTime() != null ? d.getDepartureTime() : "");
         m.put("arrivalTime",   d.getArrivalTime() != null ? d.getArrivalTime() : "");
         m.put("meterReading",  d.getMeterReading() != null ? d.getMeterReading() : 0);
         m.put("purpose",       d.getPurpose() != null ? d.getPurpose() : "");

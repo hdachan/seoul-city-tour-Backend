@@ -454,6 +454,7 @@ public class SalesFormController {
 
         if ("업무".equals(type)) {
             setField(d, "destination",   body.getOrDefault("destination", ""));
+            setField(d, "departureTime", body.getOrDefault("departureTime", ""));
             setField(d, "arrivalTime",   body.getOrDefault("arrivalTime", ""));
             setField(d, "purpose",       body.getOrDefault("purpose", ""));
             setField(d, "fuelAmount",    0.0);
@@ -461,6 +462,7 @@ public class SalesFormController {
             setField(d, "fuelUnitPrice", 0);
         } else if ("주유".equals(type)) {
             setField(d, "destination",   "");
+            setField(d, "departureTime", "");
             setField(d, "arrivalTime",   body.getOrDefault("arrivalTime", ""));
             setField(d, "purpose",       "");
             setField(d, "fuelAmount",    parseDouble(body, "fuelAmount"));
@@ -468,6 +470,7 @@ public class SalesFormController {
             setField(d, "fuelUnitPrice", parseI(body, "fuelUnitPrice"));
         } else if ("개인주유".equals(type)) {
             setField(d, "destination",   "");
+            setField(d, "departureTime", "");
             setField(d, "arrivalTime",   "");
             setField(d, "purpose",       "");
             setField(d, "fuelAmount",    parseDouble(body, "fuelAmount"));
@@ -475,6 +478,7 @@ public class SalesFormController {
             setField(d, "fuelUnitPrice", parseI(body, "fuelUnitPrice"));
         } else { // 개인사용 - 미터기만
             setField(d, "destination",   "");
+            setField(d, "departureTime", "");
             setField(d, "arrivalTime",   "");
             setField(d, "purpose",       "");
             setField(d, "fuelAmount",    0.0);
@@ -508,6 +512,7 @@ public class SalesFormController {
         m.put("date",          d.getDate().toString());
         m.put("type",          d.getType() != null ? d.getType() : "업무");
         m.put("destination",   d.getDestination() != null ? d.getDestination() : "");
+        m.put("departureTime", d.getDepartureTime() != null ? d.getDepartureTime() : "");
         m.put("arrivalTime",   d.getArrivalTime() != null ? d.getArrivalTime() : "");
         m.put("meterReading",  d.getMeterReading() != null ? d.getMeterReading() : 0);
         m.put("purpose",       d.getPurpose() != null ? d.getPurpose() : "");

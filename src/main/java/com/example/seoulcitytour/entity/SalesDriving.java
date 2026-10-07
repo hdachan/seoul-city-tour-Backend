@@ -30,6 +30,10 @@ public class SalesDriving {
     @Column
     private String destination;
 
+    // 출발 시간 (예: "09:10") - 업무
+    @Column
+    private String departureTime;
+
     // 도착 시간 (예: "09:40")
     @Column
     private String arrivalTime;
