@@ -12,8 +12,9 @@ import java.util.regex.Pattern;
 public class InputValidator {
 
     // SQL Injection 위험 패턴
+    // 키워드는 단어 단위(\b)로만 검사 (friend, walter 같은 정상 입력이 END/ALTER 로 걸리지 않도록)
     private static final Pattern SQL_PATTERN = Pattern.compile(
-        "('|--|;|/\\*|\\*/|xp_|UNION|SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE|CAST|CONVERT|CHAR|NCHAR|VARCHAR|NVARCHAR|ALTER|BEGIN|CURSOR|DECLARE|END|GOTO|TABLE|DATABASE)",
+        "('|--|;|/\\*|\\*/|\\bxp_|\\b(UNION|SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE|CAST|CONVERT|CHAR|NCHAR|VARCHAR|NVARCHAR|BEGIN|CURSOR|DECLARE|END|GOTO|TABLE|DATABASE)\\b)",
         Pattern.CASE_INSENSITIVE
     );
 
