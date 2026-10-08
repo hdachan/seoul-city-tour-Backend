@@ -185,9 +185,6 @@ public class SalesFormController {
         try {
             LocalDate date = LocalDate.parse((String) body.get("date"));
             String    note = (String) body.getOrDefault("note", "");
-
-            if (date.isBefore(LocalDate.now()))
-                return ResponseEntity.badRequest().body(Map.of("error", "이전 날짜의 비고는 수정할 수 없습니다."));
             if (isLocked(auth.getName(), date))
                 return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
 
