@@ -37,6 +37,19 @@ public interface SalesDrivingRepository extends JpaRepository<SalesDriving, Long
             @Param("username") String username,
             @Param("date") LocalDate date);
 
+    // 전체 기간 평균연비용 - 기준일까지 최소/최대 미터기, 총 주유량(L)
+    @Query("SELECT MIN(d.meterReading) FROM SalesDriving d WHERE d.salesUsername = :username " +
+            "AND d.date <= :until AND d.meterReading > 0")
+    Integer findMinMeterUntil(@Param("username") String username, @Param("until") LocalDate until);
+
+    @Query("SELECT MAX(d.meterReading) FROM SalesDriving d WHERE d.salesUsername = :username " +
+            "AND d.date <= :until AND d.meterReading > 0")
+    Integer findMaxMeterUntil(@Param("username") String username, @Param("until") LocalDate until);
+
+    @Query("SELECT COALESCE(SUM(d.fuelAmount), 0) FROM SalesDriving d WHERE d.salesUsername = :username " +
+            "AND d.date <= :until")
+    Double sumFuelAmountUntil(@Param("username") String username, @Param("until") LocalDate until);
+
     // 용무 자동완성 (중복 제거) - username null이면 전체
     @Query("SELECT DISTINCT d.purpose FROM SalesDriving d " +
             "WHERE (:username IS NULL OR d.salesUsername = :username) AND d.purpose IS NOT NULL AND d.purpose != '' " +

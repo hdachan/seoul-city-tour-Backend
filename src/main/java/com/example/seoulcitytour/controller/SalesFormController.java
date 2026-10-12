@@ -242,6 +242,22 @@ public class SalesFormController {
         return ResponseEntity.ok(Map.of("prevMeter", prevMeter != null ? prevMeter : 0));
     }
 
+    // 전체 기간 평균연비 (기준일까지 누적) - 그 달 주유 기록이 없을 때 대체용
+    // 총 주행거리 = 최대 미터기 - 최소 미터기, 총 주유량 = 주유 + 개인주유 (L)
+    @GetMapping("/fuel-efficiency")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    public ResponseEntity<?> getFuelEfficiency(@RequestParam String until, Authentication auth) {
+        LocalDate date = LocalDate.parse(until);
+        Integer min = drivingRepository.findMinMeterUntil(auth.getName(), date);
+        Integer max = drivingRepository.findMaxMeterUntil(auth.getName(), date);
+        Double  fuelL = drivingRepository.sumFuelAmountUntil(auth.getName(), date);
+        int totalDist = (min != null && max != null) ? max - min : 0;
+        return ResponseEntity.ok(Map.of(
+                "totalDist",  totalDist,
+                "totalFuelL", fuelL != null ? fuelL : 0.0
+        ));
+    }
+
     // 운행일지 추가 - 날짜 범위 지원 (startDate ~ endDate 동일 기록 저장)
     @PostMapping("/driving")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
