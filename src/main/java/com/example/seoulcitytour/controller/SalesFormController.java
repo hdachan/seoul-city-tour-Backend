@@ -37,6 +37,7 @@ public class SalesFormController {
     private final SalesCategoryRepository  categoryRepository;
     private final SalesDailyNoteRepository dailyNoteRepository;
     private final UserRepository           userRepository;
+    private final com.example.seoulcitytour.service.PersonalFuelService personalFuelService;
 
     private long calcSupplyAmount(long total) { return Math.round(total / 1.1); }
     private long calcVat(long total)          { return total - calcSupplyAmount(total); }
@@ -256,6 +257,15 @@ public class SalesFormController {
                 "totalDist",  totalDist,
                 "totalFuelL", fuelL != null ? fuelL : 0.0
         ));
+    }
+
+    // 개인주유 잔액(이월) - 저장 없이 운행 기록으로 계산
+    @GetMapping("/personal-fuel-balance")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    public ResponseEntity<?> getPersonalFuelBalance(@RequestParam Integer year,
+                                                    @RequestParam Integer month,
+                                                    Authentication auth) {
+        return ResponseEntity.ok(personalFuelService.calcBalance(auth.getName(), year, month));
     }
 
     // 운행일지 추가 - 날짜 범위 지원 (startDate ~ endDate 동일 기록 저장)

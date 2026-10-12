@@ -37,6 +37,9 @@ public interface SalesDrivingRepository extends JpaRepository<SalesDriving, Long
             @Param("username") String username,
             @Param("date") LocalDate date);
 
+    // 첫 운행 기록 (개인주유 이월 시작 달 계산용)
+    SalesDriving findFirstBySalesUsernameOrderByDateAsc(String salesUsername);
+
     // 전체 기간 평균연비용 - 기준일까지 최소/최대 미터기, 총 주유량(L)
     @Query("SELECT MIN(d.meterReading) FROM SalesDriving d WHERE d.salesUsername = :username " +
             "AND d.date <= :until AND d.meterReading > 0")
