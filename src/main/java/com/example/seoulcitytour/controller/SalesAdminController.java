@@ -28,6 +28,7 @@ public class SalesAdminController {
     private final SalesMonthLockRepository  lockRepository;
     private final SalesCategoryRepository   categoryRepository;
     private final SalesDailyNoteRepository  dailyNoteRepository;
+    private final com.example.seoulcitytour.service.PersonalFuelService personalFuelService;
 
     private long calcSupplyAmount(long total) { return Math.round(total / 1.1); }
     private long calcVat(long total)          { return total - calcSupplyAmount(total); }
@@ -262,6 +263,14 @@ public class SalesAdminController {
                                         @RequestParam Integer month) {
         var list = drivingRepository.findBySalesUsernameAndYearAndMonthOrderByDateAscIdAsc(salesUsername, year, month);
         return ResponseEntity.ok(list.stream().map(d -> buildDrivingMap(d)).toList());
+    }
+
+    // 개인주유 잔액(이월) - 영업 화면과 같은 계산 (PersonalFuelService)
+    @GetMapping("/personal-fuel-balance")
+    public ResponseEntity<?> getPersonalFuelBalance(@RequestParam String salesUsername,
+                                                    @RequestParam Integer year,
+                                                    @RequestParam Integer month) {
+        return ResponseEntity.ok(personalFuelService.calcBalance(salesUsername, year, month));
     }
 
     @GetMapping("/driving/prev-meter")

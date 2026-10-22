@@ -121,15 +121,19 @@ public class PersonalFuelService {
                 basis = "overall";
             }
         }
-        // 연비를 낼 수 없으면 넣어야 할 양은 0 으로 처리 (계산 불가 표시)
-        double needL = (kmPerL != null && kmPerL > 0) ? personalKm / kmPerL : 0;
+        // 개인사용은 있는데 연비를 낼 주유 기록이 전혀 없으면 계산 불가
+        // → 잔액에서 빼지 않고 needUnknown 으로 표시 (화면에서 안내)
+        boolean needUnknown = personalKm > 0 && (kmPerL == null || kmPerL <= 0);
+        double needL = (!needUnknown && kmPerL != null) ? personalKm / kmPerL : 0;
 
         var m = new LinkedHashMap<String, Object>();
         m.put("month", ym.toString());
+        m.put("workKm", workKm);
         m.put("personalKm", personalKm);
         m.put("kmPerL", kmPerL != null ? round1(kmPerL) : null);
         m.put("basis", basis);
         m.put("needL", needL);
+        m.put("needUnknown", needUnknown);
         m.put("putL", putL);
         return m;
     }
