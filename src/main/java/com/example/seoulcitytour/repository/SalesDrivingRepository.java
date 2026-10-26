@@ -37,6 +37,11 @@ public interface SalesDrivingRepository extends JpaRepository<SalesDriving, Long
             @Param("username") String username,
             @Param("date") LocalDate date);
 
+    // 시작 미터기 검사용 - 미터기 있는 기록 중 가장 작은 값 (없으면 null)
+    @Query("SELECT MIN(d.meterReading) FROM SalesDriving d WHERE d.salesUsername = :username " +
+            "AND d.meterReading > 0")
+    Integer findMinMeter(@Param("username") String username);
+
     // 첫 운행 기록 (개인주유 이월 시작 달 계산용)
     SalesDriving findFirstBySalesUsernameOrderByDateAsc(String salesUsername);
 

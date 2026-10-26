@@ -27,6 +27,7 @@ import java.util.Map;
 public class PersonalFuelService {
 
     private final SalesDrivingRepository drivingRepository;
+    private final StartMeterService startMeterService;
 
     /** 이월 시작 달 - null 이면 그 사람의 첫 운행 기록 달부터 */
     private static final YearMonth CARRYOVER_START = null;
@@ -77,10 +78,8 @@ public class PersonalFuelService {
         var list = drivingRepository.findBySalesUsernameAndYearAndMonthOrderByDateAscIdAsc(
                 username, ym.getYear(), ym.getMonthValue());
 
-        // 전월 마지막 미터기
-        var prevList = drivingRepository.findPrevMeterReadings(username, firstDay);
-        int last = prevList.isEmpty() || prevList.get(0).getMeterReading() == null
-                ? 0 : prevList.get(0).getMeterReading();
+        // 전월 마지막 미터기 (기록 없으면 시작 미터기)
+        int last = startMeterService.prevMeter(username, firstDay);
 
         // 거리: 날짜 → 미터기 순, 구간은 뒤쪽 기록 구분에 붙음
         var sorted = list.stream()
@@ -115,6 +114,9 @@ public class PersonalFuelService {
         } else {
             Integer min = drivingRepository.findMinMeterUntil(username, lastDay);
             Integer max = drivingRepository.findMaxMeterUntil(username, lastDay);
+            // 시작 미터기가 있으면 첫 운행 구간도 포함
+            int start = startMeterService.get(username);
+            if (min != null && start > 0) min = Math.min(min, start);
             Double totalL = drivingRepository.sumFuelAmountUntil(username, lastDay);
             if (min != null && max != null && max > min && totalL != null && totalL > 0) {
                 kmPerL = (max - min) / totalL;

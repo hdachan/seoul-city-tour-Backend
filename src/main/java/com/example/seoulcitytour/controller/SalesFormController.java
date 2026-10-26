@@ -38,6 +38,7 @@ public class SalesFormController {
     private final SalesDailyNoteRepository dailyNoteRepository;
     private final UserRepository           userRepository;
     private final com.example.seoulcitytour.service.PersonalFuelService personalFuelService;
+    private final com.example.seoulcitytour.service.StartMeterService startMeterService;
 
     private long calcSupplyAmount(long total) { return Math.round(total / 1.1); }
     private long calcVat(long total)          { return total - calcSupplyAmount(total); }
@@ -238,9 +239,26 @@ public class SalesFormController {
     @GetMapping("/driving/prev-meter")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
     public ResponseEntity<?> getPrevMeter(@RequestParam String date, Authentication auth) {
-        var list = drivingRepository.findPrevMeterReadings(auth.getName(), LocalDate.parse(date));
-        Integer prevMeter = list.isEmpty() ? null : list.get(0).getMeterReading();
-        return ResponseEntity.ok(Map.of("prevMeter", prevMeter != null ? prevMeter : 0));
+        // 이전 기록이 없으면 시작 미터기
+        return ResponseEntity.ok(Map.of("prevMeter",
+                startMeterService.prevMeter(auth.getName(), LocalDate.parse(date))));
+    }
+
+    // ── 시작 미터기 (처음 1회 입력, 이후 수정은 관리자) ──
+    @GetMapping("/start-meter")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    public ResponseEntity<?> getStartMeter(Authentication auth) {
+        return ResponseEntity.ok(startMeterService.status(auth.getName()));
+    }
+
+    @PostMapping("/start-meter")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    public ResponseEntity<?> saveStartMeter(@RequestBody Map<String, Object> body, Authentication auth) {
+        try {
+            String err = startMeterService.save(auth.getName(), body.get("startMeter"), true);
+            if (err != null) return ResponseEntity.badRequest().body(Map.of("error", err));
+            return ResponseEntity.ok(Map.of("message", "저장되었습니다."));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
     // 개인주유 잔액(이월) - 저장 없이 운행 기록으로 계산
@@ -425,8 +443,14 @@ public class SalesFormController {
                 .mapToInt(x -> x.getMeterReading())
                 .filter(m -> m > 0)
                 .max().orElse(0);
+        // 이전 기록이 없으면 시작 미터기가 기준
+        String lowerName = "이전 날짜 미터기";
+        if (lower == 0) {
+            lower = startMeterService.get(username);
+            lowerName = "시작 미터기";
+        }
         if (lower > 0 && meter < lower)
-            return "이전 날짜 미터기(" + lower + "km)보다 작을 수 없습니다. 입력값: " + meter + "km";
+            return lowerName + "(" + lower + "km)보다 작을 수 없습니다. 입력값: " + meter + "km";
 
         int upper = drivingRepository
                 .findBySalesUsernameAndDateAfterAndMeterReadingIsNotNullOrderByMeterReadingAsc(username, date)

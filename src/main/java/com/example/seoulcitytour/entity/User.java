@@ -32,4 +32,8 @@ public class User {
 
     @Column(nullable = false)
     private Boolean active = true;
+
+    // 영업: 처음 시작 미터기 (이전 운행 기록이 없을 때 기준이 되는 값)
+    @Column
+    private Integer startMeter;
 }

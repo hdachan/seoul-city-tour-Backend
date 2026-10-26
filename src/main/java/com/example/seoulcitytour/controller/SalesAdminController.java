@@ -29,6 +29,7 @@ public class SalesAdminController {
     private final SalesCategoryRepository   categoryRepository;
     private final SalesDailyNoteRepository  dailyNoteRepository;
     private final com.example.seoulcitytour.service.PersonalFuelService personalFuelService;
+    private final com.example.seoulcitytour.service.StartMeterService startMeterService;
 
     private long calcSupplyAmount(long total) { return Math.round(total / 1.1); }
     private long calcVat(long total)          { return total - calcSupplyAmount(total); }
@@ -63,9 +64,8 @@ public class SalesAdminController {
                     .toList();
             // 이번 달 첫 날 이전 마지막 미터기 가져오기
             java.time.LocalDate firstDay = java.time.LocalDate.of(year, month, 1);
-            var prevList = drivingRepository.findPrevMeterReadings(u.getUsername(), firstDay);
             long totalDist = 0, workDist = 0, personalDist = 0;
-            int lastMeter = prevList.isEmpty() ? 0 : (prevList.get(0).getMeterReading() != null ? prevList.get(0).getMeterReading() : 0);
+            int lastMeter = startMeterService.prevMeter(u.getUsername(), firstDay); // 기록 없으면 시작 미터기
             for (var d : sorted) {
                 int m = d.getMeterReading();
                 if (lastMeter > 0 && m > lastMeter) {
@@ -89,6 +89,9 @@ public class SalesAdminController {
             m.put("username",     u.getUsername());
             m.put("name",         u.getName() != null ? u.getName() : u.getUsername());
             m.put("cardNumber",   u.getCardNumber() != null ? u.getCardNumber() : "");
+            var startStatus = startMeterService.status(u.getUsername());
+            m.put("startMeter",       startStatus.get("startMeter"));
+            m.put("startMeterNeeded", startStatus.get("needed"));
             m.put("receiptCount", receiptCount);
             m.put("drivingCount", drivingCount);
             m.put("hasData",      (receiptCount + drivingCount) > 0);
@@ -276,9 +279,19 @@ public class SalesAdminController {
     @GetMapping("/driving/prev-meter")
     public ResponseEntity<?> getPrevMeter(@RequestParam String salesUsername,
                                           @RequestParam String date) {
-        var list = drivingRepository.findPrevMeterReadings(salesUsername, java.time.LocalDate.parse(date));
-        Integer prevMeter = list.isEmpty() ? null : list.get(0).getMeterReading();
-        return ResponseEntity.ok(Map.of("prevMeter", prevMeter != null ? prevMeter : 0));
+        // 이전 기록이 없으면 시작 미터기
+        return ResponseEntity.ok(Map.of("prevMeter",
+                startMeterService.prevMeter(salesUsername, LocalDate.parse(date))));
+    }
+
+    // 시작 미터기 수정 (관리자는 언제든 가능)
+    @PostMapping("/start-meter")
+    public ResponseEntity<?> saveStartMeter(@RequestBody Map<String, Object> body) {
+        try {
+            String err = startMeterService.save((String) body.get("salesUsername"), body.get("startMeter"), false);
+            if (err != null) return ResponseEntity.badRequest().body(Map.of("error", err));
+            return ResponseEntity.ok(Map.of("message", "저장되었습니다."));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
     @GetMapping("/driving/date")
@@ -442,8 +455,14 @@ public class SalesAdminController {
                 .mapToInt(x -> x.getMeterReading())
                 .filter(m -> m > 0)
                 .max().orElse(0);
+        // 이전 기록이 없으면 시작 미터기가 기준
+        String lowerName = "이전 날짜 미터기";
+        if (lower == 0) {
+            lower = startMeterService.get(username);
+            lowerName = "시작 미터기";
+        }
         if (lower > 0 && meter < lower)
-            return "이전 날짜 미터기(" + lower + "km)보다 작을 수 없습니다. 입력값: " + meter + "km";
+            return lowerName + "(" + lower + "km)보다 작을 수 없습니다. 입력값: " + meter + "km";
 
         int upper = drivingRepository
                 .findBySalesUsernameAndDateAfterAndMeterReadingIsNotNullOrderByMeterReadingAsc(username, date)
