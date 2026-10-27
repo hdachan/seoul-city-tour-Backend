@@ -53,6 +53,9 @@ public class SalesReceipt {
     @Column
     private String companyName;
 
+    @Column
+    private String note;
+
     @Column(nullable = false)
     private Integer year;
 

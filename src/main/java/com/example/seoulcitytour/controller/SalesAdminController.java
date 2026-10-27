@@ -30,6 +30,7 @@ public class SalesAdminController {
     private final SalesDailyNoteRepository  dailyNoteRepository;
     private final com.example.seoulcitytour.service.PersonalFuelService personalFuelService;
     private final com.example.seoulcitytour.service.StartMeterService startMeterService;
+    private final com.example.seoulcitytour.service.SalesCardService salesCardService;
 
     private long calcSupplyAmount(long total) { return Math.round(total / 1.1); }
     private long calcVat(long total)          { return total - calcSupplyAmount(total); }
@@ -294,6 +295,16 @@ public class SalesAdminController {
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
+    // 카드번호 등록 · 수정 (관리자는 언제든)
+    @PostMapping("/card")
+    public ResponseEntity<?> saveCard(@RequestBody Map<String, Object> body) {
+        try {
+            String err = salesCardService.save((String) body.get("salesUsername"), body.get("cardNumber"), false);
+            if (err != null) return ResponseEntity.badRequest().body(Map.of("error", err));
+            return ResponseEntity.ok(Map.of("message", "저장되었습니다."));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+    }
+
     @GetMapping("/driving/date")
     public ResponseEntity<?> getDrivingByDate(@RequestParam String salesUsername,
                                               @RequestParam String date) {
@@ -519,6 +530,7 @@ public class SalesAdminController {
         setField(r, "vat",            calcVat(total));
         setField(r, "businessNumber", body.getOrDefault("businessNumber", ""));
         setField(r, "companyName",    body.getOrDefault("companyName", ""));
+        setField(r, "note",           body.getOrDefault("note", ""));
         setField(r, "year",           date.getYear());
         setField(r, "month",          date.getMonthValue());
         setField(r, "locked",         false);
@@ -556,6 +568,7 @@ public class SalesAdminController {
         m.put("vat",            r.getVat() != null ? r.getVat() : 0L);
         m.put("businessNumber", r.getBusinessNumber() != null ? r.getBusinessNumber() : "");
         m.put("companyName",    r.getCompanyName() != null ? r.getCompanyName() : "");
+        m.put("note",           r.getNote() != null ? r.getNote() : "");
         return m;
     }
 

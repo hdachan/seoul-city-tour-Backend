@@ -39,6 +39,7 @@ public class SalesFormController {
     private final UserRepository           userRepository;
     private final com.example.seoulcitytour.service.PersonalFuelService personalFuelService;
     private final com.example.seoulcitytour.service.StartMeterService startMeterService;
+    private final com.example.seoulcitytour.service.SalesCardService salesCardService;
 
     private long calcSupplyAmount(long total) { return Math.round(total / 1.1); }
     private long calcVat(long total)          { return total - calcSupplyAmount(total); }
@@ -117,6 +118,17 @@ public class SalesFormController {
         var user = userRepository.findByUsername(auth.getName()).orElse(null);
         return ResponseEntity.ok(Map.of("cardNumber",
                 user != null && user.getCardNumber() != null ? user.getCardNumber() : ""));
+    }
+
+    // ── 내 카드번호 등록 (처음 한 번만, 이후 수정은 관리자) ──
+    @PostMapping("/my-card")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    public ResponseEntity<?> saveMyCard(@RequestBody Map<String, Object> body, Authentication auth) {
+        try {
+            String err = salesCardService.save(auth.getName(), body.get("cardNumber"), true);
+            if (err != null) return ResponseEntity.badRequest().body(Map.of("error", err));
+            return ResponseEntity.ok(Map.of("message", "저장되었습니다."));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
     // ── 비고 목록 조회 ──
@@ -532,6 +544,7 @@ public class SalesFormController {
         setField(r, "vat",            calcVat(total));
         setField(r, "businessNumber", body.getOrDefault("businessNumber", ""));
         setField(r, "companyName",    body.getOrDefault("companyName", ""));
+        setField(r, "note",           body.getOrDefault("note", ""));
         setField(r, "year",           date.getYear());
         setField(r, "month",          date.getMonthValue());
         setField(r, "locked",         false);
@@ -568,6 +581,7 @@ public class SalesFormController {
         m.put("vat",            r.getVat() != null ? r.getVat() : 0L);
         m.put("businessNumber", r.getBusinessNumber() != null ? r.getBusinessNumber() : "");
         m.put("companyName",    r.getCompanyName() != null ? r.getCompanyName() : "");
+        m.put("note",           r.getNote() != null ? r.getNote() : "");
         return m;
     }
 

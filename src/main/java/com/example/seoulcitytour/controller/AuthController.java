@@ -54,7 +54,9 @@ public class AuthController {
         }
 
         var user = userRepository.findByUsername(username).orElseThrow();
-        String token = jwtUtil.generateToken(username, user.getRole());
+        // 로그인 유지 체크 → 30일 토큰
+        boolean remember = "true".equals(String.valueOf(body.get("remember")));
+        String token = jwtUtil.generateToken(username, user.getRole(), remember);
 
         // 해당 역할의 허용 탭 목록
         List<String> allowedTabs = tabPermissionRepository.findByRoleKey(user.getRole())

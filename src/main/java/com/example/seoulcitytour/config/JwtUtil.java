@@ -20,13 +20,22 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private long expiration;
 
+    // 로그인 유지(자동로그인) 토큰 유효기간: 30일
+    private static final long REMEMBER_EXPIRATION = 30L * 24 * 60 * 60 * 1000;
+
     // 토큰 생성
     public String generateToken(String username, String role) {
+        return generateToken(username, role, false);
+    }
+
+    // remember = true 면 30일, 아니면 기본(jwt.expiration)
+    public String generateToken(String username, String role, boolean remember) {
+        long ttl = remember ? REMEMBER_EXPIRATION : expiration;
         return Jwts.builder()
                 .subject(username)
                 .claim("role", role)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + expiration))
+                .expiration(new Date(System.currentTimeMillis() + ttl))
                 .signWith(getKey())
                 .compact();
     }
