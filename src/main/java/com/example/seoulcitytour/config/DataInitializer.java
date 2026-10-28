@@ -29,6 +29,8 @@ public class DataInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) throws Exception {
         // 역할/권한 초기화는 user_role 테이블 기준으로만 체크 (유저와 독립)
         initRolesAndPermissions();
+        // 새로 생긴 탭은 처음 한 번만 기본 역할에 열어줌 (이후는 개발 탭에서 관리)
+        grantNewTabOnce("requests", List.of("ROLE_ADMIN", "ROLE_DEV"));
         // 계정 초기화는 users 테이블 기준으로만 체크 (역할과 독립)
         initDefaultUsers();
     }
@@ -71,6 +73,21 @@ public class DataInitializer implements ApplicationRunner {
             }
         }
         System.out.println("✅ 기본 역할 및 탭 권한 초기화 완료");
+    }
+
+    // 어떤 역할에도 아직 없는 탭이면 (= 처음 배포) 기본 역할에 권한 추가
+    //   개발 탭에서 일부러 뺀 뒤에도 다른 역할에 남아 있으면 다시 넣지 않음
+    private void grantNewTabOnce(String tabId, List<String> roleKeys) throws Exception {
+        boolean exists = tabPermissionRepository.findAll().stream()
+                .anyMatch(tp -> tabId.equals(tp.getTabId()));
+        if (exists) return;
+        for (String roleKey : roleKeys) {
+            TabPermission tp = new TabPermission();
+            setField(tp, "roleKey", roleKey);
+            setField(tp, "tabId",   tabId);
+            tabPermissionRepository.save(tp);
+        }
+        System.out.println("✅ 새 탭 권한 추가: " + tabId + " → " + roleKeys);
     }
 
     private void initDefaultUsers() throws Exception {
