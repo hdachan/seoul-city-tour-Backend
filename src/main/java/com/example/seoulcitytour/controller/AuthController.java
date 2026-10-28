@@ -25,6 +25,20 @@ public class AuthController {
     private final UserRepository          userRepository;
     private final TabPermissionRepository tabPermissionRepository;
     private final InputValidator          validator;
+    private final com.example.seoulcitytour.service.UserService userService;
+
+    // ── 내 비밀번호 변경 (로그인한 누구나, 현재 비밀번호 확인) ──
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(@RequestBody Map<String, String> body,
+                                            org.springframework.security.core.Authentication auth) {
+        if (auth == null) return ResponseEntity.status(401).body(Map.of("error", "로그인이 필요합니다."));
+        try {
+            userService.changeMyPassword(auth.getName(), body.get("currentPassword"), body.get("newPassword"));
+            return ResponseEntity.ok(Map.of("message", "비밀번호가 변경되었습니다."));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
