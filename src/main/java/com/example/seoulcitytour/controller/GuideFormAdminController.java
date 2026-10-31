@@ -222,7 +222,7 @@ public class GuideFormAdminController {
                 setField(income, "infant",      infant);
                 setField(income, "totalAmount", 0L);
             } else {
-                long totalAmt = amount * adult + childAmount * child;
+                long totalAmt = com.example.seoulcitytour.service.GuideIncomeCalc.total((String) body.get("tourName"), amount, adult, childAmount, child);
                 setField(income, "amount",      amount);
                 setField(income, "childAmount", childAmount);
                 setField(income, "headcount",   headcount);
@@ -282,7 +282,7 @@ public class GuideFormAdminController {
                 setField(income, "infant",      infant);
                 setField(income, "totalAmount", 0L);
             } else {
-                long totalAmt = amount * adult + childAmount * child;
+                long totalAmt = com.example.seoulcitytour.service.GuideIncomeCalc.total((String) body.get("tourName"), amount, adult, childAmount, child);
                 setField(income, "amount",      amount);
                 setField(income, "childAmount", childAmount);
                 setField(income, "headcount",   headcount);
