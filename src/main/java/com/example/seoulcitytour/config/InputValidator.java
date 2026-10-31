@@ -18,8 +18,8 @@ public class InputValidator {
         Pattern.CASE_INSENSITIVE
     );
 
-    // 아이디: 영문+숫자만, 4~20자
-    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-zA-Z0-9]{4,20}$");
+    // 아이디: 한글+영문+숫자, 2~20자 (계정 만들기 · 로그인 같은 규칙)
+    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[가-힣a-zA-Z0-9]{2,20}$");
 
     // 이름: 한글+영문+공백, 2~20자
     private static final Pattern NAME_PATTERN = Pattern.compile("^[가-힣a-zA-Z\\s]{2,20}$");

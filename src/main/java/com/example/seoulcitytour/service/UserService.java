@@ -27,6 +27,7 @@ public class UserService {
     private final UserRepository     userRepository;
     private final UserRoleRepository userRoleRepository;
     private final PasswordEncoder    passwordEncoder;
+    private final com.example.seoulcitytour.config.InputValidator inputValidator;
 
     private static boolean isPrivileged(String role) { return ADMIN.equals(role) || DEV.equals(role); }
 
@@ -41,6 +42,9 @@ public class UserService {
     public User createUser(String username, String password, String role, String name, String callerRole) {
         if (username == null || username.isBlank()) throw new IllegalArgumentException("아이디를 입력해주세요.");
         final String normalizedUsername = username.trim().toLowerCase();
+        // 로그인과 같은 규칙 - 만들어졌는데 로그인 못 하는 아이디가 생기지 않게
+        if (!inputValidator.isValidUsername(normalizedUsername))
+            throw new IllegalArgumentException("아이디는 한글·영문·숫자 2~20자로 입력해주세요. (띄어쓰기 · 특수문자 불가)");
 
         if (isPrivileged(role) && !DEV.equals(callerRole))
             throw new IllegalArgumentException("관리자·개발자 계정은 개발자만 만들 수 있습니다.");
