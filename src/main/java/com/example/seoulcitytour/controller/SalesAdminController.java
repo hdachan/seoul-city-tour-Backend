@@ -52,7 +52,9 @@ public class SalesAdminController {
                 .filter(u -> "ROLE_SALES".equals(u.getRole())).toList();
         return ResponseEntity.ok(users.stream().map(u -> {
             var driving = drivingRepository.findBySalesUsernameAndYearAndMonthOrderByDateAscIdAsc(u.getUsername(), year, month);
-            int receiptCount = receiptRepository.findBySalesUsernameAndYearAndMonthOrderByDateAsc(u.getUsername(), year, month).size();
+            var receipts = receiptRepository.findBySalesUsernameAndYearAndMonthOrderByDateAsc(u.getUsername(), year, month);
+            int receiptCount = receipts.size();
+            long receiptTotal = receipts.stream().mapToLong(r -> r.getTotalAmount() != null ? r.getTotalAmount() : 0L).sum();
             int drivingCount = driving.size();
             boolean locked = false;
 
@@ -94,6 +96,7 @@ public class SalesAdminController {
             m.put("startMeter",       startStatus.get("startMeter"));
             m.put("startMeterNeeded", startStatus.get("needed"));
             m.put("receiptCount", receiptCount);
+            m.put("receiptTotal", receiptTotal);
             m.put("drivingCount", drivingCount);
             m.put("hasData",      (receiptCount + drivingCount) > 0);
             m.put("locked",       locked);
