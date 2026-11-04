@@ -21,6 +21,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class SalesAdminController {
 
+    // 영업 정산 통계 탭에서 쓰는 조회 (영업 정산관리 또는 영업 정산 통계 권한)
+    private static final String CAN_VIEW_STATS =
+            "@tabPermissionService.hasAccess(authentication, 'sales-admin')"
+            + " or @tabPermissionService.hasAccess(authentication, 'sales-admin-stats')";
+
     private final UserRepository            userRepository;
     private final SalesReceiptRepository    receiptRepository;
     private final SalesDrivingRepository    drivingRepository;
@@ -46,6 +51,7 @@ public class SalesAdminController {
                 )).toList());
     }
 
+    @PreAuthorize(CAN_VIEW_STATS)
     @GetMapping("/summary")
     public ResponseEntity<?> getSummary(@RequestParam Integer year, @RequestParam Integer month) {
         var users = userRepository.findByActiveTrueOrderByNameAsc().stream()
@@ -264,6 +270,7 @@ public class SalesAdminController {
     }
 
     // ── 운행일지 ──
+    @PreAuthorize(CAN_VIEW_STATS)
     @GetMapping("/driving")
     public ResponseEntity<?> getDriving(@RequestParam String salesUsername,
                                         @RequestParam Integer year,
@@ -273,6 +280,7 @@ public class SalesAdminController {
     }
 
     // 개인주유 잔액(이월) - 영업 화면과 같은 계산 (PersonalFuelService)
+    @PreAuthorize(CAN_VIEW_STATS)
     @GetMapping("/personal-fuel-balance")
     public ResponseEntity<?> getPersonalFuelBalance(@RequestParam String salesUsername,
                                                     @RequestParam Integer year,
@@ -280,6 +288,7 @@ public class SalesAdminController {
         return ResponseEntity.ok(personalFuelService.calcBalance(salesUsername, year, month));
     }
 
+    @PreAuthorize(CAN_VIEW_STATS)
     @GetMapping("/driving/prev-meter")
     public ResponseEntity<?> getPrevMeter(@RequestParam String salesUsername,
                                           @RequestParam String date) {
@@ -381,6 +390,7 @@ public class SalesAdminController {
     }
 
     // ── 법인카드 ──
+    @PreAuthorize(CAN_VIEW_STATS)
     @GetMapping("/receipt")
     public ResponseEntity<?> getReceipts(@RequestParam String salesUsername,
                                          @RequestParam Integer year,
@@ -427,6 +437,7 @@ public class SalesAdminController {
         return ResponseEntity.ok(Map.of("note", note.map(SalesDailyNote::getNote).orElse("")));
     }
 
+    @PreAuthorize(CAN_VIEW_STATS)
     @GetMapping("/daily-notes")
     public ResponseEntity<?> getDailyNotes(@RequestParam String salesUsername,
                                            @RequestParam Integer year,

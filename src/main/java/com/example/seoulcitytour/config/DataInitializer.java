@@ -31,6 +31,12 @@ public class DataInitializer implements ApplicationRunner {
         initRolesAndPermissions();
         // 새로 생긴 탭은 처음 한 번만 기본 역할에 열어줌 (이후는 개발 탭에서 관리)
         grantNewTabOnce("requests", List.of("ROLE_ADMIN", "ROLE_DEV"));
+        // 영업 정산관리에 있던 전체 통계를 따로 뺀 탭 → 지금 영업 정산관리를 쓰는 역할은 계속 볼 수 있게
+        grantNewTabOnce("sales-admin-stats", tabPermissionRepository.findAll().stream()
+                .filter(tp -> "sales-admin".equals(tp.getTabId()))
+                .map(TabPermission::getRoleKey)
+                .distinct()
+                .toList());
         // 계정 초기화는 users 테이블 기준으로만 체크 (역할과 독립)
         initDefaultUsers();
     }
