@@ -483,7 +483,7 @@ public class GuideFormAdminController {
     }
     // ── 어드민 통계 ──
     @GetMapping("/stats")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('DEV')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-admin-stats')")
     public ResponseEntity<?> getAdminStats(
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) Integer month) {
@@ -530,7 +530,7 @@ public class GuideFormAdminController {
 
     // ── 날짜별 통계 ──
     @GetMapping("/stats/daily")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('DEV')")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-admin-stats')")
     public ResponseEntity<?> getDailyStats(
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) Integer month) {
