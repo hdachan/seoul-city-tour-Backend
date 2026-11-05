@@ -26,6 +26,8 @@ import java.util.Map;
 public class GuideFormController {
 
     private final GuideIncomeRepository    incomeRepository;
+    private final com.example.seoulcitytour.service.GuideIncomeOptionService incomeOptions;
+    private final com.example.seoulcitytour.repository.TourOptionRepository tourOptionRepository;
     private final GuideExpenseRepository   expenseRepository;
     private final GuideDailyFeeRepository  dailyFeeRepository;
     private final TourNameRepository       tourNameRepository;
@@ -54,6 +56,17 @@ public class GuideFormController {
         return ResponseEntity.ok(list.stream()
                 .map(c -> Map.of("id", c.getId(), "name", c.getName(), "tourNameId", c.getTourNameId() != null ? c.getTourNameId() : 0L))
                 .toList());
+    }
+
+    // ── 고른 투어의 옵션 목록 ──
+    @GetMapping("/tour-options")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form') " +
+            "or @tabPermissionService.hasAccess(authentication, 'guide-admin')")
+    public ResponseEntity<?> getTourOptions(@RequestParam String tourName) {
+        var tour = tourNameRepository.findByName(tourName);
+        if (tour.isEmpty()) return ResponseEntity.ok(java.util.List.of());
+        return ResponseEntity.ok(tourOptionRepository.findByTourNameIdOrderByNameAsc(tour.get().getId())
+                .stream().map(o -> Map.of("id", o.getId(), "name", o.getName())).toList());
     }
 
     @GetMapping("/tour-names")
@@ -106,6 +119,7 @@ public class GuideFormController {
         System.out.println("=== getRecords: username=" + auth.getName() + " year=" + y + " month=" + mo + " count=" + incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(auth.getName(), y, mo).size());
         var list = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(
                 auth.getName(), y, mo);
+        var options = incomeOptions.byIncome(list);
         return ResponseEntity.ok(list.stream().map(i -> {
             java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("id",                 i.getId());
@@ -121,6 +135,9 @@ public class GuideFormController {
             m.put("note",               i.getNote() != null ? i.getNote() : "");
             m.put("memo",               i.getMemo() != null ? i.getMemo() : "");
             m.put("paymentType",        i.getPaymentType());
+            m.put("optionCash",         i.getOptionCash() != null ? i.getOptionCash() : 0L);
+            m.put("optionCard",         i.getOptionCard() != null ? i.getOptionCard() : 0L);
+            m.put("options",            options.getOrDefault(i.getId(), java.util.List.of()));
             m.put("cashAmount",         i.getCashAmount() != null ? i.getCashAmount() : 0L);
             m.put("cardAmount",         i.getCardAmount() != null ? i.getCardAmount() : 0L);
             m.put("date",               i.getDate() != null ? i.getDate().toString() : "");
@@ -192,7 +209,7 @@ public class GuideFormController {
             }
             setField(income, "note", body.getOrDefault("note", ""));
             setField(income, "memo", body.getOrDefault("memo", ""));
-            incomeRepository.save(income);
+            incomeOptions.save(income, body);
             return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage())); }
     }
@@ -204,7 +221,7 @@ public class GuideFormController {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
         try {
-            incomeRepository.saveAll(com.example.seoulcitytour.service.GuideWanbul.build(auth.getName(), body));
+            incomeOptions.saveWanbul(auth.getName(), body);
             return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage())); }
     }
@@ -273,7 +290,7 @@ public class GuideFormController {
             }
             setField(income, "note", body.getOrDefault("note", ""));
             setField(income, "memo", body.getOrDefault("memo", ""));
-            incomeRepository.save(income);
+            incomeOptions.save(income, body);
             return ResponseEntity.ok(Map.of("message", "수정되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "수정 실패: " + e.getMessage())); }
     }
@@ -288,7 +305,7 @@ public class GuideFormController {
             GuideIncome i = incomeRepository.findById(id).orElseThrow();
             if (!i.getGuideUsername().equals(auth.getName()))
                 return ResponseEntity.status(403).body(Map.of("error", "본인 항목만 삭제 가능합니다."));
-            incomeRepository.deleteById(id);
+            incomeOptions.delete(id);
             return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
@@ -517,11 +534,13 @@ public class GuideFormController {
         long cashTotal = incomes.stream().filter(i -> "현금".equals(i.getPaymentType()) || "그외-현금".equals(i.getPaymentType()))
                 .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum()
                 + incomes.stream().filter(i -> "그외-교차".equals(i.getPaymentType()))
-                .mapToLong(i -> i.getCashAmount() != null ? i.getCashAmount() : 0L).sum();
+                .mapToLong(i -> i.getCashAmount() != null ? i.getCashAmount() : 0L).sum()
+                + incomes.stream().mapToLong(i -> i.getOptionCash() != null ? i.getOptionCash() : 0L).sum();
         long cardTotal = incomes.stream().filter(i -> "카드".equals(i.getPaymentType()) || "그외-카드".equals(i.getPaymentType()))
                 .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum()
                 + incomes.stream().filter(i -> "그외-교차".equals(i.getPaymentType()))
-                .mapToLong(i -> i.getCardAmount() != null ? i.getCardAmount() : 0L).sum();
+                .mapToLong(i -> i.getCardAmount() != null ? i.getCardAmount() : 0L).sum()
+                + incomes.stream().mapToLong(i -> i.getOptionCard() != null ? i.getOptionCard() : 0L).sum();
         long wanbul = incomes.stream().filter(i -> "완불".equals(i.getPaymentType()))
                 .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
         long totalIncome = incomes.stream().mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();

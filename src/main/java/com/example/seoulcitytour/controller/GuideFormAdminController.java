@@ -27,6 +27,8 @@ public class GuideFormAdminController {
 
     private final UserRepository           userRepository;
     private final GuideIncomeRepository    incomeRepository;
+    private final com.example.seoulcitytour.service.GuideIncomeOptionService incomeOptions;
+    private final com.example.seoulcitytour.repository.TourOptionRepository tourOptionRepository;
     private final GuideExpenseRepository   expenseRepository;
     private final GuideDailyFeeRepository  dailyFeeRepository;
     private final GuideMonthLockRepository lockRepository;
@@ -77,9 +79,40 @@ public class GuideFormAdminController {
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
+    // ── 투어 옵션 ──
+    @GetMapping("/tour-options")
+    public ResponseEntity<?> getTourOptions(@RequestParam Long tourNameId) {
+        return ResponseEntity.ok(tourOptionRepository.findByTourNameIdOrderByNameAsc(tourNameId).stream()
+                .map(o -> Map.of("id", o.getId(), "name", o.getName()))
+                .toList());
+    }
+
+    @PostMapping("/tour-options")
+    public ResponseEntity<?> addTourOption(@RequestBody Map<String, Object> body) {
+        try {
+            String name = body.get("name") != null ? body.get("name").toString().trim() : "";
+            Long tourNameId = Long.parseLong(body.get("tourNameId").toString());
+            if (name.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "이름을 입력해주세요."));
+            if (!tourNameRepository.existsById(tourNameId)) return ResponseEntity.badRequest().body(Map.of("error", "투어를 찾을 수 없습니다."));
+            if (tourOptionRepository.existsByNameAndTourNameId(name, tourNameId))
+                return ResponseEntity.badRequest().body(Map.of("error", "이미 존재하는 옵션입니다."));
+            tourOptionRepository.save(new com.example.seoulcitytour.entity.TourOption(name, tourNameId));
+            return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+    }
+
+    @DeleteMapping("/tour-options/{id}")
+    public ResponseEntity<?> deleteTourOption(@PathVariable Long id) {
+        try {
+            tourOptionRepository.deleteById(id);
+            return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+    }
+
     @DeleteMapping("/tour-names/{id}")
     public ResponseEntity<?> deleteTourName(@PathVariable Long id) {
         try {
+            tourOptionRepository.deleteByTourNameId(id);
             tourNameRepository.deleteById(id);
             return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
@@ -149,6 +182,7 @@ public class GuideFormAdminController {
     public ResponseEntity<?> getIncome(@RequestParam String guideUsername,
                                        @RequestParam Integer year, @RequestParam Integer month) {
         var list = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(guideUsername, year, month);
+        var options = incomeOptions.byIncome(list);
         return ResponseEntity.ok(list.stream().map(i -> {
             java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("id",                 i.getId());
@@ -164,6 +198,9 @@ public class GuideFormAdminController {
             m.put("note",               i.getNote() != null ? i.getNote() : "");
             m.put("memo",               i.getMemo() != null ? i.getMemo() : "");
             m.put("paymentType",        i.getPaymentType());
+            m.put("optionCash",         i.getOptionCash() != null ? i.getOptionCash() : 0L);
+            m.put("optionCard",         i.getOptionCard() != null ? i.getOptionCard() : 0L);
+            m.put("options",            options.getOrDefault(i.getId(), java.util.List.of()));
             m.put("cashAmount",         i.getCashAmount() != null ? i.getCashAmount() : 0L);
             m.put("cardAmount",         i.getCardAmount() != null ? i.getCardAmount() : 0L);
             m.put("date",               i.getDate().toString());
@@ -231,7 +268,7 @@ public class GuideFormAdminController {
                 setField(income, "infant",      infant);
                 setField(income, "totalAmount", totalAmt);
             }
-            incomeRepository.save(income);
+            incomeOptions.save(income, body);
             return ResponseEntity.ok(Map.of("message", "추가되었습니다.", "id", income.getId()));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage())); }
     }
@@ -240,7 +277,7 @@ public class GuideFormAdminController {
     @PostMapping("/income/wanbul")
     public ResponseEntity<?> addWanbulIncome(@RequestBody Map<String, Object> body) {
         try {
-            incomeRepository.saveAll(com.example.seoulcitytour.service.GuideWanbul.build((String) body.get("guideUsername"), body));
+            incomeOptions.saveWanbul((String) body.get("guideUsername"), body);
             return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage())); }
     }
@@ -300,7 +337,7 @@ public class GuideFormAdminController {
                 setField(income, "infant",      infant);
                 setField(income, "totalAmount", totalAmt);
             }
-            incomeRepository.save(income);
+            incomeOptions.save(income, body);
             return ResponseEntity.ok(Map.of("message", "수정되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "수정 실패: " + e.getMessage())); }
     }
@@ -308,7 +345,7 @@ public class GuideFormAdminController {
     // ── 수입 삭제 ──
     @DeleteMapping("/income/{id}")
     public ResponseEntity<?> deleteIncome(@PathVariable Long id) {
-        incomeRepository.deleteById(id);
+        incomeOptions.delete(id);
         return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
     }
 
@@ -513,9 +550,11 @@ public class GuideFormAdminController {
             long actualDailyFee = totalDailyFee - tax;
 
             // 현금 수입
-            long cashIncome = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), y, m)
-                    .stream().filter(i -> "현금".equals(i.getPaymentType()) || "그외-현금".equals(i.getPaymentType()))
-                    .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
+            var incomes = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), y, m);
+            long cashIncome = incomes.stream()
+                    .filter(i -> "현금".equals(i.getPaymentType()) || "그외-현금".equals(i.getPaymentType()))
+                    .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum()
+                    + incomes.stream().mapToLong(i -> i.getOptionCash() != null ? i.getOptionCash() : 0L).sum();
 
             // 현금 지출
             long cashExpense = expenseRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), y, m)
@@ -573,6 +612,9 @@ public class GuideFormAdminController {
                 d.put("cashIncome", (long) d.get("cashIncome") + amt);
             else if ("카드".equals(pt) || "그외-카드".equals(pt))
                 d.put("cardIncome", (long) d.get("cardIncome") + amt);
+            // 완불 · 그외 · 그외-교차 의 옵션 (현금 / 카드 수입은 위 금액에 포함)
+            d.put("cashIncome", (long) d.get("cashIncome") + (i.getOptionCash() != null ? i.getOptionCash() : 0L));
+            d.put("cardIncome", (long) d.get("cardIncome") + (i.getOptionCard() != null ? i.getOptionCard() : 0L));
         }
 
         for (var e : allExpenses) {

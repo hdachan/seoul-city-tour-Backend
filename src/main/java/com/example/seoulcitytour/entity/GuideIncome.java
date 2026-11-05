@@ -52,6 +52,12 @@ public class GuideIncome {
     @Column
     private Long cardAmount;        // 그외-교차 카드 금액
 
+    @Column
+    private Long optionCash;        // 완불 · 그외 · 그외-교차 의 옵션 중 현금 (현금 / 카드 수입은 총액에 포함되어 0)
+
+    @Column
+    private Long optionCard;        // 완불 · 그외 · 그외-교차 의 옵션 중 카드
+
     @Column(nullable = false)
     private String paymentType;     // 현금 / 카드 / 그외 / 완불 / 그외-교차
 
