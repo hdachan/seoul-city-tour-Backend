@@ -197,6 +197,18 @@ public class GuideFormController {
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage())); }
     }
 
+    // ── 완불 수입 추가 (대표자 여러 명, 사람마다 한 건 · 전부 저장되거나 전부 안 됨) ──
+    @PostMapping("/records/wanbul")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
+    public ResponseEntity<?> addWanbulRecords(@RequestBody Map<String, Object> body, Authentication auth) {
+        if (isMonthLocked(auth.getName()))
+            return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
+        try {
+            incomeRepository.saveAll(com.example.seoulcitytour.service.GuideWanbul.build(auth.getName(), body));
+            return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage())); }
+    }
+
     // ── 수입 수정 ──
     @PutMapping("/records/{id}")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
@@ -314,7 +326,10 @@ public class GuideFormController {
         if (isMonthLocked(auth.getName()))
             return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
         try {
-            LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+            String dateStr = (String) body.get("date");
+            LocalDate date = (dateStr != null && !dateStr.isBlank())
+                    ? LocalDate.parse(dateStr)
+                    : LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
             long amount    = parseL(body, "amount");
             int headcount  = parseI(body, "headcount");
 

@@ -61,6 +61,9 @@ public class SalesAdminController {
             var receipts = receiptRepository.findBySalesUsernameAndYearAndMonthOrderByDateAsc(u.getUsername(), year, month);
             int receiptCount = receipts.size();
             long receiptTotal = receipts.stream().mapToLong(r -> r.getTotalAmount() != null ? r.getTotalAmount() : 0L).sum();
+            long receiptPersonal = receipts.stream()
+                    .filter(r -> "개인사용".equals(r.getCategory()))
+                    .mapToLong(r -> r.getTotalAmount() != null ? r.getTotalAmount() : 0L).sum();
             int drivingCount = driving.size();
             boolean locked = false;
 
@@ -103,6 +106,7 @@ public class SalesAdminController {
             m.put("startMeterNeeded", startStatus.get("needed"));
             m.put("receiptCount", receiptCount);
             m.put("receiptTotal", receiptTotal);
+            m.put("receiptPersonal", receiptPersonal);
             m.put("drivingCount", drivingCount);
             m.put("hasData",      (receiptCount + drivingCount) > 0);
             m.put("locked",       locked);

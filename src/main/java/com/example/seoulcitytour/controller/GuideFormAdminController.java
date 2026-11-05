@@ -236,6 +236,15 @@ public class GuideFormAdminController {
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage())); }
     }
 
+    // ── 완불 수입 추가 (대표자 여러 명, 사람마다 한 건 · 전부 저장되거나 전부 안 됨) ──
+    @PostMapping("/income/wanbul")
+    public ResponseEntity<?> addWanbulIncome(@RequestBody Map<String, Object> body) {
+        try {
+            incomeRepository.saveAll(com.example.seoulcitytour.service.GuideWanbul.build((String) body.get("guideUsername"), body));
+            return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "추가 실패: " + e.getMessage())); }
+    }
+
     // ── 수입 수정 ──
     @PutMapping("/income/{id}")
     public ResponseEntity<?> updateIncome(@PathVariable Long id, @RequestBody Map<String, Object> body) {
