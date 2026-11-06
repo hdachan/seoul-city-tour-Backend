@@ -184,6 +184,7 @@ public class GuideFormAdminController {
                                        @RequestParam Integer year, @RequestParam Integer month) {
         var list = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(guideUsername, year, month);
         var options = incomeOptions.byIncome(list);
+        var optSum = incomeOptions.sumByIncome(list);
         return ResponseEntity.ok(list.stream().map(i -> {
             java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("id",                 i.getId());
@@ -201,8 +202,8 @@ public class GuideFormAdminController {
             m.put("paymentType",        i.getPaymentType());
             m.put("optionCash",         i.getOptionCash() != null ? i.getOptionCash() : 0L);
             m.put("optionCard",         i.getOptionCard() != null ? i.getOptionCard() : 0L);
-            m.put("cashIn",             com.example.seoulcitytour.service.GuideIncomeMoney.cash(i));
-            m.put("cardIn",             com.example.seoulcitytour.service.GuideIncomeMoney.card(i));
+            m.put("cashIn",             com.example.seoulcitytour.service.GuideIncomeMoney.cash(i, optSum.getOrDefault(i.getId(), 0L)));
+            m.put("cardIn",             com.example.seoulcitytour.service.GuideIncomeMoney.card(i, optSum.getOrDefault(i.getId(), 0L)));
             m.put("options",            options.getOrDefault(i.getId(), java.util.List.of()));
             m.put("cashAmount",         i.getCashAmount() != null ? i.getCashAmount() : 0L);
             m.put("cardAmount",         i.getCardAmount() != null ? i.getCardAmount() : 0L);
@@ -554,7 +555,8 @@ public class GuideFormAdminController {
 
             // 현금 수입
             var incomes = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), y, m);
-            long cashIncome = incomes.stream().mapToLong(com.example.seoulcitytour.service.GuideIncomeMoney::cash).sum();
+            var optSum = incomeOptions.sumByIncome(incomes);   // 옵션은 빼고 투어 금액만 (옵션은 옵션별 통계)
+            long cashIncome = incomes.stream().mapToLong(i -> com.example.seoulcitytour.service.GuideIncomeMoney.cash(i, optSum.getOrDefault(i.getId(), 0L))).sum();
 
             // 현금 지출
             long cashExpense = expenseRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), y, m)
@@ -637,6 +639,7 @@ public class GuideFormAdminController {
         var allIncomes = incomeRepository.findAll().stream()
                 .filter(i -> i.getYear() == y && i.getMonth() == m)
                 .toList();
+        var optSum = incomeOptions.sumByIncome(allIncomes);   // 옵션은 빼고 투어 금액만
         var allExpenses = expenseRepository.findAll().stream()
                 .filter(e -> e.getYear() == y && e.getMonth() == m)
                 .toList();
@@ -652,8 +655,8 @@ public class GuideFormAdminController {
                 return d;
             });
             var d = byDate.get(date);
-            d.put("cashIncome", (long) d.get("cashIncome") + com.example.seoulcitytour.service.GuideIncomeMoney.cash(i));
-            d.put("cardIncome", (long) d.get("cardIncome") + com.example.seoulcitytour.service.GuideIncomeMoney.card(i));
+            d.put("cashIncome", (long) d.get("cashIncome") + com.example.seoulcitytour.service.GuideIncomeMoney.cash(i, optSum.getOrDefault(i.getId(), 0L)));
+            d.put("cardIncome", (long) d.get("cardIncome") + com.example.seoulcitytour.service.GuideIncomeMoney.card(i, optSum.getOrDefault(i.getId(), 0L)));
         }
 
         for (var e : allExpenses) {

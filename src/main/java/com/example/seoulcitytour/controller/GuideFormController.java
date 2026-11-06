@@ -120,6 +120,7 @@ public class GuideFormController {
         var list = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(
                 auth.getName(), y, mo);
         var options = incomeOptions.byIncome(list);
+        var optSum = incomeOptions.sumByIncome(list);
         return ResponseEntity.ok(list.stream().map(i -> {
             java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("id",                 i.getId());
@@ -137,8 +138,8 @@ public class GuideFormController {
             m.put("paymentType",        i.getPaymentType());
             m.put("optionCash",         i.getOptionCash() != null ? i.getOptionCash() : 0L);
             m.put("optionCard",         i.getOptionCard() != null ? i.getOptionCard() : 0L);
-            m.put("cashIn",             com.example.seoulcitytour.service.GuideIncomeMoney.cash(i));
-            m.put("cardIn",             com.example.seoulcitytour.service.GuideIncomeMoney.card(i));
+            m.put("cashIn",             com.example.seoulcitytour.service.GuideIncomeMoney.cash(i, optSum.getOrDefault(i.getId(), 0L)));
+            m.put("cardIn",             com.example.seoulcitytour.service.GuideIncomeMoney.card(i, optSum.getOrDefault(i.getId(), 0L)));
             m.put("options",            options.getOrDefault(i.getId(), java.util.List.of()));
             m.put("cashAmount",         i.getCashAmount() != null ? i.getCashAmount() : 0L);
             m.put("cardAmount",         i.getCardAmount() != null ? i.getCardAmount() : 0L);
@@ -515,6 +516,7 @@ public class GuideFormController {
                 year != null ? year : LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).getYear(),
                 month != null ? month : LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).getMonthValue());
 
+        var optSum = incomeOptions.sumByIncome(incomes);   // 옵션은 빼고 투어 금액만 (옵션은 옵션별 통계)
         // 투어별 통계
         java.util.Map<String, java.util.Map<String, Object>> tourStats = new java.util.LinkedHashMap<>();
         for (var i : incomes) {
@@ -529,15 +531,15 @@ public class GuideFormController {
             t.put("totalAdult", (int) t.get("totalAdult") + (i.getAdult() != null ? i.getAdult() : 0));
             t.put("totalChild", (int) t.get("totalChild") + (i.getChild() != null ? i.getChild() : 0));
             t.put("totalInfant", (int) t.get("totalInfant") + (i.getInfant() != null ? i.getInfant() : 0));
-            t.put("totalAmount", (long) t.get("totalAmount") + (i.getTotalAmount() != null ? i.getTotalAmount() : 0L));
+            t.put("totalAmount", (long) t.get("totalAmount") + com.example.seoulcitytour.service.GuideIncomeMoney.tour(i, optSum.getOrDefault(i.getId(), 0L)));
         }
 
         // 결제수단별 합계
-        long cashTotal = incomes.stream().mapToLong(com.example.seoulcitytour.service.GuideIncomeMoney::cash).sum();
-        long cardTotal = incomes.stream().mapToLong(com.example.seoulcitytour.service.GuideIncomeMoney::card).sum();
+        long cashTotal = incomes.stream().mapToLong(i -> com.example.seoulcitytour.service.GuideIncomeMoney.cash(i, optSum.getOrDefault(i.getId(), 0L))).sum();
+        long cardTotal = incomes.stream().mapToLong(i -> com.example.seoulcitytour.service.GuideIncomeMoney.card(i, optSum.getOrDefault(i.getId(), 0L))).sum();
         long wanbul = incomes.stream().filter(i -> "완불".equals(i.getPaymentType()))
-                .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
-        long totalIncome = incomes.stream().mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
+                .mapToLong(i -> com.example.seoulcitytour.service.GuideIncomeMoney.tour(i, optSum.getOrDefault(i.getId(), 0L))).sum();
+        long totalIncome = incomes.stream().mapToLong(i -> com.example.seoulcitytour.service.GuideIncomeMoney.tour(i, optSum.getOrDefault(i.getId(), 0L))).sum();
         long totalExpense = expenses.stream().mapToLong(e -> e.getTotalAmount() != null ? e.getTotalAmount() : 0L).sum();
         int totalAdult = incomes.stream().mapToInt(i -> i.getAdult() != null ? i.getAdult() : 0).sum();
         int totalChild = incomes.stream().mapToInt(i -> i.getChild() != null ? i.getChild() : 0).sum();

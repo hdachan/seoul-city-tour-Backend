@@ -74,6 +74,17 @@ public class GuideIncomeOptionService {
         incomeRepository.deleteById(incomeId);
     }
 
+    /** 수입 번호별 옵션금액 합 (통계에서 옵션을 빼고 투어 금액만 셀 때) */
+    public Map<Long, Long> sumByIncome(List<GuideIncome> incomes) {
+        Map<Long, Long> result = new java.util.HashMap<>();
+        if (incomes.isEmpty()) return result;
+        List<Long> ids = incomes.stream().map(GuideIncome::getId).toList();
+        for (GuideIncomeOption o : optionRepository.findByIncomeIdInOrderByIdAsc(ids)) {
+            result.merge(o.getIncomeId(), o.getAmount() != null ? o.getAmount() : 0L, Long::sum);
+        }
+        return result;
+    }
+
     /** 수입 목록의 옵션을 수입 번호별로 */
     public Map<Long, List<Map<String, Object>>> byIncome(List<GuideIncome> incomes) {
         Map<Long, List<Map<String, Object>>> result = new LinkedHashMap<>();
