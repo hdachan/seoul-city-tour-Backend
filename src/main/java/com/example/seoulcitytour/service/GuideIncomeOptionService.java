@@ -18,15 +18,15 @@ import java.util.Set;
 /**
  * 수입 옵션 저장 (가이드 정산 · 가이드 정산관리 공용)
  *  - 총액 = 기존 계산 + 옵션금액 합계
- *  - 현금 / 카드 수입의 옵션은 그 결제유형으로 총액에 포함되어 기존 합계에 잡힘
- *  - 완불 / 그외 / 그외-교차 는 결제유형으로 합계에 안 잡히므로
- *    옵션마다 고른 현금 / 카드를 optionCash / optionCard 에 따로 담고, 합계 계산에서 더함
+ *  - 옵션마다 현금 / 카드 / 교차(현금 + 카드)를 고르고, 현금 몫은 optionCash · 카드 몫은 optionCard 에 담음
+ *  - 결제유형을 안 보낸 옵션은 수입 결제유형을 따름 (현금 · 그외-현금 → 현금, 카드 · 그외-카드 → 카드)
+ *  - 통계의 현금 / 카드 계산은 GuideIncomeMoney
  */
 @Service
 @RequiredArgsConstructor
 public class GuideIncomeOptionService {
 
-    private static final Set<String> CHOOSE_PAY = Set.of("완불", "그외", "그외-교차");
+    private static final Set<String> OPTION_PAY = Set.of("현금", "카드", "교차");
 
     private final GuideIncomeRepository incomeRepository;
     private final GuideIncomeOptionRepository optionRepository;
@@ -36,11 +36,10 @@ public class GuideIncomeOptionService {
     public void save(GuideIncome income, Map<String, Object> body) throws Exception {
         List<GuideIncomeOption> options = parse(income, body.get("options"));
         long sum = 0, cash = 0, card = 0;
-        boolean choose = CHOOSE_PAY.contains(income.getPaymentType());
         for (GuideIncomeOption o : options) {
             sum += o.getAmount();
-            if (choose && "현금".equals(o.getPaymentType())) cash += o.getAmount();
-            if (choose && "카드".equals(o.getPaymentType())) card += o.getAmount();
+            cash += o.cashPart();
+            card += o.cardPart();
         }
         long base = income.getTotalAmount() != null ? income.getTotalAmount() : 0L;
         set(income, "totalAmount", base + sum);
@@ -51,7 +50,8 @@ public class GuideIncomeOptionService {
         optionRepository.deleteByIncomeId(income.getId());
         optionRepository.flush();
         for (GuideIncomeOption o : options) {
-            optionRepository.save(new GuideIncomeOption(income.getId(), o.getOptionName(), o.getAmount(), o.getPaymentType()));
+            optionRepository.save(new GuideIncomeOption(income.getId(), o.getOptionName(), o.getAmount(), o.getPaymentType(),
+                    o.getCashAmount(), o.getCardAmount()));
         }
     }
 
@@ -84,6 +84,8 @@ public class GuideIncomeOptionService {
             m.put("optionName", o.getOptionName());
             m.put("amount", o.getAmount());
             m.put("paymentType", o.getPaymentType());
+            m.put("cashAmount", o.cashPart());
+            m.put("cardAmount", o.cardPart());
             result.computeIfAbsent(o.getIncomeId(), k -> new ArrayList<>()).add(m);
         }
         return result;
@@ -95,32 +97,41 @@ public class GuideIncomeOptionService {
         List<GuideIncomeOption> list = new ArrayList<>();
         if (raw == null) {
             if (income.getId() == null) return list;
-            // 옵션을 안 보낸 수정: 기존 옵션 유지 (결제유형이 바뀌었으면 맞춰서 다시 계산)
+            // 옵션을 안 보낸 수정: 기존 옵션 그대로 유지
             for (GuideIncomeOption o : optionRepository.findByIncomeIdOrderByIdAsc(income.getId())) {
-                list.add(new GuideIncomeOption(null, o.getOptionName(), o.getAmount(), resolvePay(payType, o.getPaymentType())));
+                list.add(new GuideIncomeOption(null, o.getOptionName(), o.getAmount(), o.getPaymentType(),
+                        o.getCashAmount(), o.getCardAmount()));
             }
             return list;
         }
         for (Map<String, Object> o : (List<Map<String, Object>>) raw) {
             String name = o.get("optionName") != null ? o.get("optionName").toString().trim() : "";
-            Object a = o.get("amount");
-            long amount = (a != null && !a.toString().isBlank()) ? Long.parseLong(a.toString()) : 0L;
             if (name.isEmpty()) throw new IllegalArgumentException("옵션을 선택해주세요.");
-            if (amount <= 0) throw new IllegalArgumentException("옵션금액을 입력해주세요.");
-            String pay = o.get("paymentType") != null ? o.get("paymentType").toString() : "";
-            list.add(new GuideIncomeOption(null, name, amount, resolvePay(payType, pay)));
+            String pay = resolvePay(payType, o.get("paymentType") != null ? o.get("paymentType").toString() : "");
+            if ("교차".equals(pay)) {
+                long cashAmt = num(o.get("cashAmount")), cardAmt = num(o.get("cardAmount"));
+                if (cashAmt < 0 || cardAmt < 0 || cashAmt + cardAmt <= 0)
+                    throw new IllegalArgumentException("교차 옵션의 현금 / 카드 금액을 입력해주세요.");
+                list.add(new GuideIncomeOption(null, name, cashAmt + cardAmt, pay, cashAmt, cardAmt));
+            } else {
+                long amount = num(o.get("amount"));
+                if (amount <= 0) throw new IllegalArgumentException("옵션금액을 입력해주세요.");
+                list.add(new GuideIncomeOption(null, name, amount, pay));
+            }
         }
         return list;
     }
 
+    /** 옵션이 고른 결제유형. 안 골랐으면 현금 · 카드 수입은 그 결제유형을 따르고, 나머지는 골라야 함 */
     private String resolvePay(String incomePay, String optionPay) {
-        if (CHOOSE_PAY.contains(incomePay)) {
-            if (!"현금".equals(optionPay) && !"카드".equals(optionPay))
-                throw new IllegalArgumentException("옵션마다 현금 / 카드를 골라주세요.");
-            return optionPay;
-        }
-        // 현금 · 카드 · 그외-현금 · 그외-카드: 수입 결제유형을 따름
-        return incomePay.endsWith("카드") ? "카드" : "현금";
+        if (OPTION_PAY.contains(optionPay)) return optionPay;
+        if ("현금".equals(incomePay) || "그외-현금".equals(incomePay)) return "현금";
+        if ("카드".equals(incomePay) || "그외-카드".equals(incomePay)) return "카드";
+        throw new IllegalArgumentException("옵션마다 현금 / 카드 / 교차를 골라주세요.");
+    }
+
+    private static long num(Object v) {
+        return (v != null && !v.toString().isBlank()) ? Long.parseLong(v.toString()) : 0L;
     }
 
     private static void set(Object obj, String fieldName, Object value) throws Exception {

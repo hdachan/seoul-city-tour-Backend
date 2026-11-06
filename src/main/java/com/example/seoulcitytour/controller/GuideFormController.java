@@ -137,6 +137,8 @@ public class GuideFormController {
             m.put("paymentType",        i.getPaymentType());
             m.put("optionCash",         i.getOptionCash() != null ? i.getOptionCash() : 0L);
             m.put("optionCard",         i.getOptionCard() != null ? i.getOptionCard() : 0L);
+            m.put("cashIn",             com.example.seoulcitytour.service.GuideIncomeMoney.cash(i));
+            m.put("cardIn",             com.example.seoulcitytour.service.GuideIncomeMoney.card(i));
             m.put("options",            options.getOrDefault(i.getId(), java.util.List.of()));
             m.put("cashAmount",         i.getCashAmount() != null ? i.getCashAmount() : 0L);
             m.put("cardAmount",         i.getCardAmount() != null ? i.getCardAmount() : 0L);
@@ -531,16 +533,8 @@ public class GuideFormController {
         }
 
         // 결제수단별 합계
-        long cashTotal = incomes.stream().filter(i -> "현금".equals(i.getPaymentType()) || "그외-현금".equals(i.getPaymentType()))
-                .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum()
-                + incomes.stream().filter(i -> "그외-교차".equals(i.getPaymentType()))
-                .mapToLong(i -> i.getCashAmount() != null ? i.getCashAmount() : 0L).sum()
-                + incomes.stream().mapToLong(i -> i.getOptionCash() != null ? i.getOptionCash() : 0L).sum();
-        long cardTotal = incomes.stream().filter(i -> "카드".equals(i.getPaymentType()) || "그외-카드".equals(i.getPaymentType()))
-                .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum()
-                + incomes.stream().filter(i -> "그외-교차".equals(i.getPaymentType()))
-                .mapToLong(i -> i.getCardAmount() != null ? i.getCardAmount() : 0L).sum()
-                + incomes.stream().mapToLong(i -> i.getOptionCard() != null ? i.getOptionCard() : 0L).sum();
+        long cashTotal = incomes.stream().mapToLong(com.example.seoulcitytour.service.GuideIncomeMoney::cash).sum();
+        long cardTotal = incomes.stream().mapToLong(com.example.seoulcitytour.service.GuideIncomeMoney::card).sum();
         long wanbul = incomes.stream().filter(i -> "완불".equals(i.getPaymentType()))
                 .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();
         long totalIncome = incomes.stream().mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum();

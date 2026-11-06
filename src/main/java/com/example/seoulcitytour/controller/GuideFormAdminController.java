@@ -29,6 +29,7 @@ public class GuideFormAdminController {
     private final GuideIncomeRepository    incomeRepository;
     private final com.example.seoulcitytour.service.GuideIncomeOptionService incomeOptions;
     private final com.example.seoulcitytour.repository.TourOptionRepository tourOptionRepository;
+    private final com.example.seoulcitytour.repository.GuideIncomeOptionRepository incomeOptionRepository;
     private final GuideExpenseRepository   expenseRepository;
     private final GuideDailyFeeRepository  dailyFeeRepository;
     private final GuideMonthLockRepository lockRepository;
@@ -200,6 +201,8 @@ public class GuideFormAdminController {
             m.put("paymentType",        i.getPaymentType());
             m.put("optionCash",         i.getOptionCash() != null ? i.getOptionCash() : 0L);
             m.put("optionCard",         i.getOptionCard() != null ? i.getOptionCard() : 0L);
+            m.put("cashIn",             com.example.seoulcitytour.service.GuideIncomeMoney.cash(i));
+            m.put("cardIn",             com.example.seoulcitytour.service.GuideIncomeMoney.card(i));
             m.put("options",            options.getOrDefault(i.getId(), java.util.List.of()));
             m.put("cashAmount",         i.getCashAmount() != null ? i.getCashAmount() : 0L);
             m.put("cardAmount",         i.getCardAmount() != null ? i.getCardAmount() : 0L);
@@ -250,7 +253,7 @@ public class GuideFormAdminController {
                 setField(income, "child",       child);
                 setField(income, "infant",      infant);
                 setField(income, "totalAmount", cashAmt + cardAmt);
-            } else if ("완불".equals(payType) || "그외".equals(payType) || payType.startsWith("그외-")) {
+            } else if ("완불".equals(payType) || "그외".equals(payType)) {
                 setField(income, "amount",      0L);
                 setField(income, "childAmount", 0L);
                 setField(income, "headcount",   headcount);
@@ -319,7 +322,7 @@ public class GuideFormAdminController {
                 setField(income, "child",       child);
                 setField(income, "infant",      infant);
                 setField(income, "totalAmount", cashAmt + cardAmt);
-            } else if ("완불".equals(payType) || "그외".equals(payType) || payType.startsWith("그외-")) {
+            } else if ("완불".equals(payType) || "그외".equals(payType)) {
                 setField(income, "amount",      0L);
                 setField(income, "childAmount", 0L);
                 setField(income, "headcount",   headcount);
@@ -551,10 +554,7 @@ public class GuideFormAdminController {
 
             // 현금 수입
             var incomes = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), y, m);
-            long cashIncome = incomes.stream()
-                    .filter(i -> "현금".equals(i.getPaymentType()) || "그외-현금".equals(i.getPaymentType()))
-                    .mapToLong(i -> i.getTotalAmount() != null ? i.getTotalAmount() : 0L).sum()
-                    + incomes.stream().mapToLong(i -> i.getOptionCash() != null ? i.getOptionCash() : 0L).sum();
+            long cashIncome = incomes.stream().mapToLong(com.example.seoulcitytour.service.GuideIncomeMoney::cash).sum();
 
             // 현금 지출
             long cashExpense = expenseRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), y, m)
@@ -573,6 +573,52 @@ public class GuideFormAdminController {
             return map;
         }).toList();
 
+        return ResponseEntity.ok(result);
+    }
+
+    // ── 옵션별 통계 (전체 합). 카테고리에 없는 이름(기타에 적은 것)은 기타 한 줄로 묶고 적은 이름은 details ──
+    @GetMapping("/stats/options")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-admin-stats')")
+    public ResponseEntity<?> getOptionStats(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month) {
+
+        LocalDate now = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+        int y = year != null ? year : now.getYear();
+        int m = month != null ? month : now.getMonthValue();
+
+        var incomeIds = incomeRepository.findAll().stream()
+                .filter(i -> i.getYear() != null && i.getMonth() != null && i.getYear() == y && i.getMonth() == m)
+                .map(GuideIncome::getId).toList();
+        var named = tourOptionRepository.findAll().stream()
+                .map(com.example.seoulcitytour.entity.TourOption::getName).collect(java.util.stream.Collectors.toSet());
+
+        java.util.Map<String, long[]> byName = new java.util.TreeMap<>();   // 이름 → [건수, 현금, 카드]
+        java.util.Map<String, long[]> etc = new java.util.TreeMap<>();
+        if (!incomeIds.isEmpty()) {
+            for (var o : incomeOptionRepository.findByIncomeIdInOrderByIdAsc(incomeIds)) {
+                var target = named.contains(o.getOptionName()) ? byName : etc;
+                long[] v = target.computeIfAbsent(o.getOptionName(), k -> new long[3]);
+                v[0]++; v[1] += o.cashPart(); v[2] += o.cardPart();
+            }
+        }
+        java.util.function.BiFunction<String, long[], java.util.Map<String, Object>> row = (name, v) -> {
+            java.util.Map<String, Object> r = new java.util.LinkedHashMap<>();
+            r.put("name", name); r.put("count", v[0]); r.put("cash", v[1]); r.put("card", v[2]); r.put("total", v[1] + v[2]);
+            return r;
+        };
+        java.util.Comparator<java.util.Map<String, Object>> byTotal =
+                java.util.Comparator.comparingLong(r -> -(long) r.get("total"));
+
+        var result = new java.util.ArrayList<java.util.Map<String, Object>>();
+        byName.entrySet().stream().map(e -> row.apply(e.getKey(), e.getValue())).sorted(byTotal).forEach(result::add);
+        if (!etc.isEmpty()) {
+            long[] sum = new long[3];
+            etc.values().forEach(v -> { sum[0] += v[0]; sum[1] += v[1]; sum[2] += v[2]; });
+            var etcRow = row.apply("기타", sum);
+            etcRow.put("details", etc.entrySet().stream().map(e -> row.apply(e.getKey(), e.getValue())).sorted(byTotal).toList());
+            result.add(etcRow);
+        }
         return ResponseEntity.ok(result);
     }
 
@@ -606,18 +652,12 @@ public class GuideFormAdminController {
                 return d;
             });
             var d = byDate.get(date);
-            String pt = i.getPaymentType();
-            long amt = i.getTotalAmount() != null ? i.getTotalAmount() : 0L;
-            if ("현금".equals(pt) || "그외-현금".equals(pt))
-                d.put("cashIncome", (long) d.get("cashIncome") + amt);
-            else if ("카드".equals(pt) || "그외-카드".equals(pt))
-                d.put("cardIncome", (long) d.get("cardIncome") + amt);
-            // 완불 · 그외 · 그외-교차 의 옵션 (현금 / 카드 수입은 위 금액에 포함)
-            d.put("cashIncome", (long) d.get("cashIncome") + (i.getOptionCash() != null ? i.getOptionCash() : 0L));
-            d.put("cardIncome", (long) d.get("cardIncome") + (i.getOptionCard() != null ? i.getOptionCard() : 0L));
+            d.put("cashIncome", (long) d.get("cashIncome") + com.example.seoulcitytour.service.GuideIncomeMoney.cash(i));
+            d.put("cardIncome", (long) d.get("cardIncome") + com.example.seoulcitytour.service.GuideIncomeMoney.card(i));
         }
 
         for (var e : allExpenses) {
+            if (!"현금".equals(e.getPaymentType())) continue;   // 지출은 현금만 (카드 지출은 정산에서 안 뺌)
             String date = e.getDate().toString();
             byDate.computeIfAbsent(date, k -> {
                 java.util.Map<String, Object> d = new java.util.LinkedHashMap<>();
