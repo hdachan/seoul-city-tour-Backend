@@ -34,11 +34,24 @@ public class GuideFormController {
     private final com.example.seoulcitytour.repository.GuideExpenseCategoryRepository expenseCategoryRepository;
     private final GuideMonthLockRepository lockRepository;
 
-    private boolean isMonthLocked(String guideUsername) {
-        LocalDate now = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
-        return lockRepository
-                .findByGuideUsernameAndYearAndMonth(guideUsername, now.getYear(), now.getMonthValue())
-                .map(GuideMonthLock::getLocked).orElse(false);
+    private final com.example.seoulcitytour.service.GuideMonthLockService monthLock;
+
+    // 잠금은 그 기록이 속한 달 기준 (body 의 date, 없으면 오늘)
+    private boolean isLocked(Authentication auth, Map<String, Object> body) {
+        return monthLock.isLocked(auth.getName(), bodyDate(body));
+    }
+    private LocalDate bodyDate(Map<String, Object> body) {
+        Object v = body.get("date");
+        return (v != null && !v.toString().isBlank()) ? LocalDate.parse(v.toString()) : null;
+    }
+    // 수정: 원래 날짜의 달, 새 날짜의 달 둘 다 열려 있어야 함
+    private boolean isLockedForUpdate(Authentication auth, LocalDate current, Map<String, Object> body) {
+        LocalDate next = bodyDate(body);
+        return monthLock.isLocked(auth.getName(), current)
+                || (next != null && monthLock.isLocked(auth.getName(), next));
+    }
+    private ResponseEntity<?> lockedResponse() {
+        return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달이라 입력 · 수정할 수 없습니다."));
     }
 
     // ── 투어이름 ──
@@ -103,8 +116,13 @@ public class GuideFormController {
     // ── 잠금 상태 ──
     @GetMapping("/lock-status")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
-    public ResponseEntity<?> getLockStatus(Authentication auth) {
-        return ResponseEntity.ok(Map.of("locked", isMonthLocked(auth.getName())));
+    public ResponseEntity<?> getLockStatus(Authentication auth,
+                                           @RequestParam(required = false) Integer year,
+                                           @RequestParam(required = false) Integer month) {
+        boolean locked = (year != null && month != null)
+                ? monthLock.isLocked(auth.getName(), year, month)
+                : monthLock.isLocked(auth.getName(), (LocalDate) null);
+        return ResponseEntity.ok(Map.of("locked", locked));
     }
 
     // ── 수입 조회 ──
@@ -152,8 +170,7 @@ public class GuideFormController {
     @PostMapping("/records")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> addRecord(@RequestBody Map<String, Object> body, Authentication auth) {
-        if (isMonthLocked(auth.getName()))
-            return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
+        if (isLocked(auth, body)) return lockedResponse();
         try {
             LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
             long amount    = parseL(body, "amount");
@@ -221,8 +238,7 @@ public class GuideFormController {
     @PostMapping("/records/wanbul")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> addWanbulRecords(@RequestBody Map<String, Object> body, Authentication auth) {
-        if (isMonthLocked(auth.getName()))
-            return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
+        if (isLocked(auth, body)) return lockedResponse();
         try {
             incomeOptions.saveWanbul(auth.getName(), body);
             return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
@@ -235,12 +251,11 @@ public class GuideFormController {
     public ResponseEntity<?> updateRecord(@PathVariable Long id,
                                           @RequestBody Map<String, Object> body,
                                           Authentication auth) {
-        if (isMonthLocked(auth.getName()))
-            return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
         try {
             GuideIncome income = incomeRepository.findById(id).orElseThrow();
             if (!income.getGuideUsername().equals(auth.getName()))
                 return ResponseEntity.status(403).body(Map.of("error", "본인 항목만 수정 가능합니다."));
+            if (isLockedForUpdate(auth, income.getDate(), body)) return lockedResponse();
 
             long amount      = parseL(body, "amount");
             long childAmount = parseL(body, "childAmount");
@@ -302,12 +317,11 @@ public class GuideFormController {
     @DeleteMapping("/records/{id}")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> deleteRecord(@PathVariable Long id, Authentication auth) {
-        if (isMonthLocked(auth.getName()))
-            return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
         try {
             GuideIncome i = incomeRepository.findById(id).orElseThrow();
             if (!i.getGuideUsername().equals(auth.getName()))
                 return ResponseEntity.status(403).body(Map.of("error", "본인 항목만 삭제 가능합니다."));
+            if (monthLock.isLocked(auth.getName(), i.getDate())) return lockedResponse();
             incomeOptions.delete(id);
             return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
@@ -343,8 +357,7 @@ public class GuideFormController {
     @PostMapping("/expense")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> addExpense(@RequestBody Map<String, Object> body, Authentication auth) {
-        if (isMonthLocked(auth.getName()))
-            return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
+        if (isLocked(auth, body)) return lockedResponse();
         try {
             String dateStr = (String) body.get("date");
             LocalDate date = (dateStr != null && !dateStr.isBlank())
@@ -377,12 +390,11 @@ public class GuideFormController {
     public ResponseEntity<?> updateExpense(@PathVariable Long id,
                                            @RequestBody Map<String, Object> body,
                                            Authentication auth) {
-        if (isMonthLocked(auth.getName()))
-            return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
         try {
             GuideExpense expense = expenseRepository.findById(id).orElseThrow();
             if (!expense.getGuideUsername().equals(auth.getName()))
                 return ResponseEntity.status(403).body(Map.of("error", "본인 항목만 수정 가능합니다."));
+            if (isLockedForUpdate(auth, expense.getDate(), body)) return lockedResponse();
 
             long amount   = parseL(body, "amount");
             int headcount = parseI(body, "headcount");
@@ -402,12 +414,11 @@ public class GuideFormController {
     @DeleteMapping("/expense/{id}")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> deleteExpense(@PathVariable Long id, Authentication auth) {
-        if (isMonthLocked(auth.getName()))
-            return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
         try {
             GuideExpense e = expenseRepository.findById(id).orElseThrow();
             if (!e.getGuideUsername().equals(auth.getName()))
                 return ResponseEntity.status(403).body(Map.of("error", "본인 항목만 삭제 가능합니다."));
+            if (monthLock.isLocked(auth.getName(), e.getDate())) return lockedResponse();
             expenseRepository.deleteById(id);
             return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
@@ -435,8 +446,7 @@ public class GuideFormController {
     @PostMapping("/daily-fee")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> addDailyFee(@RequestBody Map<String, Object> body, Authentication auth) {
-        if (isMonthLocked(auth.getName()))
-            return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
+        if (isLocked(auth, body)) return lockedResponse();
         try {
             LocalDate date = LocalDate.parse((String) body.get("date"));
             GuideDailyFee fee = new GuideDailyFee();
@@ -457,12 +467,11 @@ public class GuideFormController {
     public ResponseEntity<?> updateDailyFee(@PathVariable Long id,
                                             @RequestBody Map<String, Object> body,
                                             Authentication auth) {
-        if (isMonthLocked(auth.getName()))
-            return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
         try {
             GuideDailyFee fee = dailyFeeRepository.findById(id).orElseThrow();
             if (!fee.getGuideUsername().equals(auth.getName()))
                 return ResponseEntity.status(403).body(Map.of("error", "본인 항목만 수정 가능합니다."));
+            if (isLockedForUpdate(auth, fee.getDate(), body)) return lockedResponse();
             LocalDate date = LocalDate.parse((String) body.get("date"));
             setField(fee, "amount", parseL(body, "amount"));
             setField(fee, "date",   date);
@@ -477,12 +486,11 @@ public class GuideFormController {
     @DeleteMapping("/daily-fee/{id}")
     @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-form')")
     public ResponseEntity<?> deleteDailyFee(@PathVariable Long id, Authentication auth) {
-        if (isMonthLocked(auth.getName()))
-            return ResponseEntity.badRequest().body(Map.of("error", "이번 달은 관리자에 의해 잠겨있습니다."));
         try {
             GuideDailyFee d = dailyFeeRepository.findById(id).orElseThrow();
             if (!d.getGuideUsername().equals(auth.getName()))
                 return ResponseEntity.status(403).body(Map.of("error", "본인 항목만 삭제 가능합니다."));
+            if (monthLock.isLocked(auth.getName(), d.getDate())) return lockedResponse();
             dailyFeeRepository.deleteById(id);
             return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }

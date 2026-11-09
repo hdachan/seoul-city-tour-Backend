@@ -33,6 +33,7 @@ public class GuideFormAdminController {
     private final GuideExpenseRepository   expenseRepository;
     private final GuideDailyFeeRepository  dailyFeeRepository;
     private final GuideMonthLockRepository lockRepository;
+    private final com.example.seoulcitytour.service.GuideMonthLockService monthLock;
     private final TourNameRepository       tourNameRepository;
     private final com.example.seoulcitytour.repository.GuideExpenseCategoryRepository expenseCategoryRepository;
 
@@ -130,8 +131,7 @@ public class GuideFormAdminController {
             int incomeCount   = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), year, month).size();
             int expenseCount  = expenseRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), year, month).size();
             int dailyFeeCount = dailyFeeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(g.getUsername(), year, month).size();
-            boolean locked    = lockRepository.findByGuideUsernameAndYearAndMonth(g.getUsername(), year, month)
-                    .map(GuideMonthLock::getLocked).orElse(false);
+            boolean locked    = monthLock.isLocked(g.getUsername(), year, month);
             return Map.of(
                     "username",      g.getUsername(),
                     "name",          g.getName() != null ? g.getName() : g.getUsername(),
@@ -151,9 +151,7 @@ public class GuideFormAdminController {
     public ResponseEntity<?> getLockStatus(@RequestParam String guideUsername,
                                            @RequestParam Integer year,
                                            @RequestParam Integer month) {
-        boolean locked = lockRepository
-                .findByGuideUsernameAndYearAndMonth(guideUsername, year, month)
-                .map(GuideMonthLock::getLocked).orElse(false);
+        boolean locked = monthLock.isLocked(guideUsername, year, month);
         return ResponseEntity.ok(Map.of("locked", locked));
     }
 
