@@ -183,31 +183,36 @@ public class GuideFormAdminController {
         var list = incomeRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(guideUsername, year, month);
         var options = incomeOptions.byIncome(list);
         var optSum = incomeOptions.sumByIncome(list);
-        return ResponseEntity.ok(list.stream().map(i -> {
-            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
-            m.put("id",                 i.getId());
-            m.put("tourName",           i.getTourName());
-            m.put("representativeName", i.getRepresentativeName() != null ? i.getRepresentativeName() : "");
-            m.put("amount",             i.getAmount() != null ? i.getAmount() : 0L);
-            m.put("headcount",          i.getHeadcount() != null ? i.getHeadcount() : 0);
-            m.put("adult",              i.getAdult() != null ? i.getAdult() : 0);
-            m.put("child",              i.getChild() != null ? i.getChild() : 0);
-            m.put("childAmount",        i.getChildAmount() != null ? i.getChildAmount() : 0L);
-            m.put("infant",             i.getInfant() != null ? i.getInfant() : 0);
-            m.put("totalAmount",        i.getTotalAmount() != null ? i.getTotalAmount() : 0L);
-            m.put("note",               i.getNote() != null ? i.getNote() : "");
-            m.put("memo",               i.getMemo() != null ? i.getMemo() : "");
-            m.put("paymentType",        i.getPaymentType());
-            m.put("optionCash",         i.getOptionCash() != null ? i.getOptionCash() : 0L);
-            m.put("optionCard",         i.getOptionCard() != null ? i.getOptionCard() : 0L);
-            m.put("cashIn",             com.example.seoulcitytour.service.GuideIncomeMoney.cash(i, optSum.getOrDefault(i.getId(), 0L)));
-            m.put("cardIn",             com.example.seoulcitytour.service.GuideIncomeMoney.card(i, optSum.getOrDefault(i.getId(), 0L)));
-            m.put("options",            options.getOrDefault(i.getId(), java.util.List.of()));
-            m.put("cashAmount",         i.getCashAmount() != null ? i.getCashAmount() : 0L);
-            m.put("cardAmount",         i.getCardAmount() != null ? i.getCardAmount() : 0L);
-            m.put("date",               i.getDate().toString());
-            return m;
-        }).toList());
+        return ResponseEntity.ok(list.stream().map(i -> incomeRow(i, options, optSum)).toList());
+    }
+
+    // 수입 한 줄 (정산관리 · 🔎 가이드 상세 통계 공용)
+    private java.util.Map<String, Object> incomeRow(GuideIncome i,
+                                                    java.util.Map<Long, java.util.List<java.util.Map<String, Object>>> options,
+                                                    java.util.Map<Long, Long> optSum) {
+        java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("id",                 i.getId());
+        m.put("tourName",           i.getTourName());
+        m.put("representativeName", i.getRepresentativeName() != null ? i.getRepresentativeName() : "");
+        m.put("amount",             i.getAmount() != null ? i.getAmount() : 0L);
+        m.put("headcount",          i.getHeadcount() != null ? i.getHeadcount() : 0);
+        m.put("adult",              i.getAdult() != null ? i.getAdult() : 0);
+        m.put("child",              i.getChild() != null ? i.getChild() : 0);
+        m.put("childAmount",        i.getChildAmount() != null ? i.getChildAmount() : 0L);
+        m.put("infant",             i.getInfant() != null ? i.getInfant() : 0);
+        m.put("totalAmount",        i.getTotalAmount() != null ? i.getTotalAmount() : 0L);
+        m.put("note",               i.getNote() != null ? i.getNote() : "");
+        m.put("memo",               i.getMemo() != null ? i.getMemo() : "");
+        m.put("paymentType",        i.getPaymentType());
+        m.put("optionCash",         i.getOptionCash() != null ? i.getOptionCash() : 0L);
+        m.put("optionCard",         i.getOptionCard() != null ? i.getOptionCard() : 0L);
+        m.put("cashIn",             com.example.seoulcitytour.service.GuideIncomeMoney.cash(i, optSum.getOrDefault(i.getId(), 0L)));
+        m.put("cardIn",             com.example.seoulcitytour.service.GuideIncomeMoney.card(i, optSum.getOrDefault(i.getId(), 0L)));
+        m.put("options",            options.getOrDefault(i.getId(), java.util.List.of()));
+        m.put("cashAmount",         i.getCashAmount() != null ? i.getCashAmount() : 0L);
+        m.put("cardAmount",         i.getCardAmount() != null ? i.getCardAmount() : 0L);
+        m.put("date",               i.getDate().toString());
+        return m;
     }
 
     // ── 수입 추가 ──
@@ -392,19 +397,22 @@ public class GuideFormAdminController {
     public ResponseEntity<?> getExpense(@RequestParam String guideUsername,
                                         @RequestParam Integer year, @RequestParam Integer month) {
         var list = expenseRepository.findByGuideUsernameAndYearAndMonthOrderByDateAsc(guideUsername, year, month);
-        return ResponseEntity.ok(list.stream().map(e -> {
-            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
-            m.put("id",          e.getId());
-            m.put("tourName",    e.getTourName() != null ? e.getTourName() : "");
-            m.put("expenseType", e.getExpenseType());
-            m.put("amount",      e.getAmount());
-            m.put("headcount",   e.getHeadcount() != null ? e.getHeadcount() : 0);
-            m.put("totalAmount", e.getTotalAmount() != null ? e.getTotalAmount() : 0L);
-            m.put("paymentType", e.getPaymentType());
-            m.put("memo",        e.getMemo() != null ? e.getMemo() : "");
-            m.put("date",        e.getDate().toString());
-            return m;
-        }).toList());
+        return ResponseEntity.ok(list.stream().map(this::expenseRow).toList());
+    }
+
+    // 지출 한 줄 (정산관리 · 🔎 가이드 상세 통계 공용)
+    private java.util.Map<String, Object> expenseRow(GuideExpense e) {
+        java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("id",          e.getId());
+        m.put("tourName",    e.getTourName() != null ? e.getTourName() : "");
+        m.put("expenseType", e.getExpenseType());
+        m.put("amount",      e.getAmount());
+        m.put("headcount",   e.getHeadcount() != null ? e.getHeadcount() : 0);
+        m.put("totalAmount", e.getTotalAmount() != null ? e.getTotalAmount() : 0L);
+        m.put("paymentType", e.getPaymentType());
+        m.put("memo",        e.getMemo() != null ? e.getMemo() : "");
+        m.put("date",        e.getDate().toString());
+        return m;
     }
 
     // ── 지출 추가 ──
@@ -680,6 +688,57 @@ public class GuideFormAdminController {
             return row;
         }).toList();
 
+        return ResponseEntity.ok(result);
+    }
+
+    // ── 🔎 가이드 상세 통계: 한 달치 모든 가이드의 수입 · 지출 · 일비 (장부 대조용, 조회만) ──
+    //  수입 · 지출 한 줄은 정산관리 목록과 같은 모양 + guideUsername
+    @GetMapping("/stats/detail")
+    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'guide-detail-stats')")
+    public ResponseEntity<?> getDetailStats(@RequestParam Integer year, @RequestParam Integer month) {
+        var incomes = incomeRepository.findByYearAndMonthOrderByDateAscIdAsc(year, month);
+        var options = incomeOptions.byIncome(incomes);
+        var optSum = incomeOptions.sumByIncome(incomes);
+        var expenses = expenseRepository.findByYearAndMonthOrderByDateAscIdAsc(year, month);
+        var fees = dailyFeeRepository.findByYearAndMonthOrderByDateAscIdAsc(year, month);
+
+        // 이름: 지금 가이드 전부 + 이 달에 기록이 있는 사람 (퇴사자 포함)
+        java.util.Set<String> used = new java.util.HashSet<>();
+        incomes.forEach(i -> used.add(i.getGuideUsername()));
+        expenses.forEach(e -> used.add(e.getGuideUsername()));
+        fees.forEach(f -> used.add(f.getGuideUsername()));
+        var guides = userRepository.findAll().stream()
+                .filter(u -> used.contains(u.getUsername())
+                        || ("ROLE_GUIDE".equals(u.getRole()) && Boolean.TRUE.equals(u.getActive())))
+                .map(u -> {
+                    java.util.Map<String, Object> g = new java.util.LinkedHashMap<>();
+                    g.put("username", u.getUsername());
+                    g.put("name", u.getName() != null ? u.getName() : u.getUsername());
+                    return g;
+                })
+                .sorted(java.util.Comparator.comparing(g -> String.valueOf(g.get("name"))))
+                .toList();
+
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("guides", guides);
+        result.put("incomes", incomes.stream().map(i -> {
+            var m = incomeRow(i, options, optSum);
+            m.put("guideUsername", i.getGuideUsername());
+            return m;
+        }).toList());
+        result.put("expenses", expenses.stream().map(e -> {
+            var m = expenseRow(e);
+            m.put("guideUsername", e.getGuideUsername());
+            return m;
+        }).toList());
+        result.put("dailyFees", fees.stream().map(f -> {
+            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id", f.getId());
+            m.put("guideUsername", f.getGuideUsername());
+            m.put("amount", f.getAmount() != null ? f.getAmount() : 0L);
+            m.put("date", f.getDate().toString());
+            return m;
+        }).toList());
         return ResponseEntity.ok(result);
     }
 }

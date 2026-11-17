@@ -28,6 +28,7 @@ public class DevController {
             Map.of("id", "ginseng",     "label", "🌿 인삼 매출"),
             Map.of("id", "guide-admin", "label", "📂 가이드 정산관리"),
             Map.of("id", "guide-admin-stats", "label", "📊 가이드 정산 통계"),
+            Map.of("id", "guide-detail-stats", "label", "🔎 가이드 상세 통계"),
             Map.of("id", "sales-admin", "label", "📊 영업 정산관리"),
             Map.of("id", "sales-admin-stats", "label", "📈 영업 정산 통계"),
             Map.of("id", "guide-form",  "label", "📝 가이드 정산"),

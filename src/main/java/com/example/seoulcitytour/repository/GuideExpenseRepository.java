@@ -11,4 +11,7 @@ public interface GuideExpenseRepository extends JpaRepository<GuideExpense, Long
 
     List<GuideExpense> findByGuideUsernameAndYearAndMonth(
             String guideUsername, Integer year, Integer month);
+
+    // 한 달치 전체 가이드 (🔎 가이드 상세 통계)
+    List<GuideExpense> findByYearAndMonthOrderByDateAscIdAsc(Integer year, Integer month);
 }

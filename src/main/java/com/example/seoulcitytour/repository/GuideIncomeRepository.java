@@ -11,4 +11,7 @@ public interface GuideIncomeRepository extends JpaRepository<GuideIncome, Long> 
 
     List<GuideIncome> findByGuideUsernameAndYearAndMonth(
             String guideUsername, Integer year, Integer month);
+
+    // 한 달치 전체 가이드 (🔎 가이드 상세 통계)
+    List<GuideIncome> findByYearAndMonthOrderByDateAscIdAsc(Integer year, Integer month);
 }
