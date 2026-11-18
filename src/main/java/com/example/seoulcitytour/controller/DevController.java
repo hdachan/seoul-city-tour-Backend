@@ -34,6 +34,7 @@ public class DevController {
             Map.of("id", "guide-form",  "label", "📝 가이드 정산"),
             Map.of("id", "guide-stats", "label", "📊 내 통계"),
             Map.of("id", "sales",       "label", "💼 영업 정산"),
+            Map.of("id", "sales-holiday", "label", "🏖 영업 휴무"),
             Map.of("id", "admin",       "label", "👥 계정 관리"),
             Map.of("id", "requests",    "label", "✉️ 요청사항")
     );

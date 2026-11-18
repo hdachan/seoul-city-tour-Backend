@@ -33,6 +33,7 @@ public class SalesAdminController {
     private final SalesMonthLockRepository  lockRepository;
     private final SalesCategoryRepository   categoryRepository;
     private final SalesDailyNoteRepository  dailyNoteRepository;
+    private final SalesHolidayRepository    holidayRepository;
     private final com.example.seoulcitytour.service.PersonalFuelService personalFuelService;
     private final com.example.seoulcitytour.service.StartMeterService startMeterService;
     private final com.example.seoulcitytour.service.SalesCardService salesCardService;
@@ -144,6 +145,11 @@ public class SalesAdminController {
                     .toList();
             m.put("enteredDates", enteredDates);
             m.put("enteredDays",  (long) enteredDates.size());
+            // 🏖 휴무 (영업 휴무 탭에서 본인이 적은 날 · 사유)
+            var ym = YearMonth.of(year, month);
+            m.put("holidays", holidayRepository
+                    .findBySalesUsernameAndDateBetweenOrderByDateAsc(u.getUsername(), ym.atDay(1), ym.atEndOfMonth())
+                    .stream().map(SalesHolidayController::row).toList());
             return m;
         }).toList());
     }
