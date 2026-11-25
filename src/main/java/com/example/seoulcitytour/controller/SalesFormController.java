@@ -40,6 +40,8 @@ public class SalesFormController {
     private final com.example.seoulcitytour.service.PersonalFuelService personalFuelService;
     private final com.example.seoulcitytour.service.StartMeterService startMeterService;
     private final com.example.seoulcitytour.service.SalesCardService salesCardService;
+    // 👤 관리자가 영업 사원 화면을 그 사람 그대로 쓸 때 (X-View-As) – 아니면 로그인한 본인
+    private final com.example.seoulcitytour.service.SalesViewAs viewAs;
 
     private long calcSupplyAmount(long total) { return Math.round(total / 1.1); }
     private long calcVat(long total)          { return total - calcSupplyAmount(total); }
@@ -95,16 +97,16 @@ public class SalesFormController {
 
     // ── 잠금 상태 ──
     @GetMapping("/lock-status")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getLockStatus(@RequestParam Integer year,
                                            @RequestParam Integer month,
                                            Authentication auth) {
-        return ResponseEntity.ok(getLockInfo(auth.getName(), year, month));
+        return ResponseEntity.ok(getLockInfo(viewAs.who(auth), year, month));
     }
 
     // ── 카테고리 ──
     @GetMapping("/categories")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getCategories() {
         return ResponseEntity.ok(categoryRepository.findAllByOrderByNameAsc().stream()
                 .map(c -> Map.of("id", c.getId(), "name", c.getName()))
@@ -113,19 +115,19 @@ public class SalesFormController {
 
     // ── 내 카드번호 ──
     @GetMapping("/my-card")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getMyCard(Authentication auth) {
-        var user = userRepository.findByUsername(auth.getName()).orElse(null);
+        var user = userRepository.findByUsername(viewAs.who(auth)).orElse(null);
         return ResponseEntity.ok(Map.of("cardNumber",
                 user != null && user.getCardNumber() != null ? user.getCardNumber() : ""));
     }
 
     // ── 내 카드번호 등록 (처음 한 번만, 이후 수정은 관리자) ──
     @PostMapping("/my-card")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> saveMyCard(@RequestBody Map<String, Object> body, Authentication auth) {
         try {
-            String err = salesCardService.save(auth.getName(), body.get("cardNumber"), true);
+            String err = salesCardService.save(viewAs.who(auth), body.get("cardNumber"), true);
             if (err != null) return ResponseEntity.badRequest().body(Map.of("error", err));
             return ResponseEntity.ok(Map.of("message", "저장되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
@@ -147,7 +149,7 @@ public class SalesFormController {
                                        @RequestBody java.util.List<Map<String, String>> items,
                                        Authentication auth) {
         var driving = drivingRepository.findById(drivingId).orElse(null);
-        if (driving == null || !driving.getSalesUsername().equals(auth.getName()))
+        if (driving == null || !driving.getSalesUsername().equals(viewAs.who(auth)))
             return ResponseEntity.badRequest().body(Map.of("error", "권한이 없습니다."));
 
         noteRepository.deleteByDrivingId(drivingId);
@@ -170,16 +172,16 @@ public class SalesFormController {
 
     // ── 용무 자동완성 ──
     @GetMapping("/purposes")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getPurposes(Authentication auth) {
-        return ResponseEntity.ok(drivingRepository.findDistinctPurposes(auth.getName()));
+        return ResponseEntity.ok(drivingRepository.findDistinctPurposes(viewAs.who(auth)));
     }
 
     // ── 도착지 자동완성 ──
     @GetMapping("/destinations")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getDestinations(Authentication auth) {
-        return ResponseEntity.ok(drivingRepository.findDistinctDestinations(auth.getName()));
+        return ResponseEntity.ok(drivingRepository.findDistinctDestinations(viewAs.who(auth)));
     }
 
     // ────────────────────────────────────────
@@ -187,25 +189,25 @@ public class SalesFormController {
     // ────────────────────────────────────────
 
     @GetMapping("/daily-note")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getDailyNote(@RequestParam String date, Authentication auth) {
-        var note = dailyNoteRepository.findBySalesUsernameAndDate(auth.getName(), LocalDate.parse(date));
+        var note = dailyNoteRepository.findBySalesUsernameAndDate(viewAs.who(auth), LocalDate.parse(date));
         return ResponseEntity.ok(Map.of("note", note.map(SalesDailyNote::getNote).orElse("")));
     }
 
     @PostMapping("/daily-note")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> saveDailyNote(@RequestBody Map<String, Object> body, Authentication auth) {
         try {
             LocalDate date = LocalDate.parse((String) body.get("date"));
             String    note = (String) body.getOrDefault("note", "");
-            if (isLocked(auth.getName(), date))
+            if (isLocked(viewAs.who(auth), date))
                 return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
 
             SalesDailyNote n = dailyNoteRepository
-                    .findBySalesUsernameAndDate(auth.getName(), date)
+                    .findBySalesUsernameAndDate(viewAs.who(auth), date)
                     .orElse(new SalesDailyNote());
-            setField(n, "salesUsername", auth.getName());
+            setField(n, "salesUsername", viewAs.who(auth));
             setField(n, "date", date);
             setField(n, "note", note);
             dailyNoteRepository.save(n);
@@ -214,13 +216,13 @@ public class SalesFormController {
     }
 
     @GetMapping("/daily-notes")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getDailyNotes(@RequestParam Integer year,
                                            @RequestParam Integer month,
                                            Authentication auth) {
         YearMonth ym = YearMonth.of(year, month);
         var list = dailyNoteRepository.findBySalesUsernameAndDateBetween(
-                auth.getName(), ym.atDay(1), ym.atEndOfMonth());
+                viewAs.who(auth), ym.atDay(1), ym.atEndOfMonth());
         return ResponseEntity.ok(list.stream()
                 .map(n -> Map.of("date", n.getDate().toString(), "note", n.getNote()))
                 .toList());
@@ -231,43 +233,43 @@ public class SalesFormController {
     // ────────────────────────────────────────
 
     @GetMapping("/driving")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getDriving(@RequestParam Integer year,
                                         @RequestParam Integer month,
                                         Authentication auth) {
         var list = drivingRepository.findBySalesUsernameAndYearAndMonthOrderByDateAscIdAsc(
-                auth.getName(), year, month);
+                viewAs.who(auth), year, month);
         return ResponseEntity.ok(list.stream().map(d -> buildDrivingMap(d)).toList());
     }
 
     @GetMapping("/driving/date")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getDrivingByDate(@RequestParam String date, Authentication auth) {
         var list = drivingRepository.findBySalesUsernameAndDateOrderByIdAsc(
-                auth.getName(), LocalDate.parse(date));
+                viewAs.who(auth), LocalDate.parse(date));
         return ResponseEntity.ok(list.stream().map(d -> buildDrivingMap(d)).toList());
     }
 
     @GetMapping("/driving/prev-meter")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getPrevMeter(@RequestParam String date, Authentication auth) {
         // 이전 기록이 없으면 시작 미터기
         return ResponseEntity.ok(Map.of("prevMeter",
-                startMeterService.prevMeter(auth.getName(), LocalDate.parse(date))));
+                startMeterService.prevMeter(viewAs.who(auth), LocalDate.parse(date))));
     }
 
     // ── 시작 미터기 (처음 1회 입력, 이후 수정은 관리자) ──
     @GetMapping("/start-meter")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getStartMeter(Authentication auth) {
-        return ResponseEntity.ok(startMeterService.status(auth.getName()));
+        return ResponseEntity.ok(startMeterService.status(viewAs.who(auth)));
     }
 
     @PostMapping("/start-meter")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> saveStartMeter(@RequestBody Map<String, Object> body, Authentication auth) {
         try {
-            String err = startMeterService.save(auth.getName(), body.get("startMeter"), true);
+            String err = startMeterService.save(viewAs.who(auth), body.get("startMeter"), true);
             if (err != null) return ResponseEntity.badRequest().body(Map.of("error", err));
             return ResponseEntity.ok(Map.of("message", "저장되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
@@ -275,16 +277,16 @@ public class SalesFormController {
 
     // 개인주유 잔액(이월) - 저장 없이 운행 기록으로 계산
     @GetMapping("/personal-fuel-balance")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getPersonalFuelBalance(@RequestParam Integer year,
                                                     @RequestParam Integer month,
                                                     Authentication auth) {
-        return ResponseEntity.ok(personalFuelService.calcBalance(auth.getName(), year, month));
+        return ResponseEntity.ok(personalFuelService.calcBalance(viewAs.who(auth), year, month));
     }
 
     // 운행일지 추가 - 날짜 범위 지원 (startDate ~ endDate 동일 기록 저장)
     @PostMapping("/driving")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> addDriving(@RequestBody Map<String, Object> body, Authentication auth) {
         try {
             LocalDate startDate = LocalDate.parse((String) body.get("startDate"));
@@ -307,12 +309,12 @@ public class SalesFormController {
             Long lastSavedId = null;
 
             for (LocalDate date : dates) {
-                if (isLocked(auth.getName(), date))
+                if (isLocked(viewAs.who(auth), date))
                     continue; // 잠긴 주는 건너뜀
 
                 // 미터기 중복/역주행 체크 (미터기 있을 때만)
                 if (newMeter != null) {
-                    var existing = drivingRepository.findBySalesUsernameAndDateOrderByIdAsc(auth.getName(), date);
+                    var existing = drivingRepository.findBySalesUsernameAndDateOrderByIdAsc(viewAs.who(auth), date);
                     int maxExisting = existing.stream()
                             .mapToInt(d -> d.getMeterReading() != null ? d.getMeterReading() : 0)
                             .max().orElse(0);
@@ -320,13 +322,13 @@ public class SalesFormController {
                         return ResponseEntity.badRequest().body(Map.of("error",
                                 "이미 더 높은 미터기 값(" + maxExisting + "km)이 존재합니다. 입력값: " + newMeter + "km"));
                     }
-                    String rangeError = validateMeterRange(auth.getName(), date, newMeter, null);
+                    String rangeError = validateMeterRange(viewAs.who(auth), date, newMeter, null);
                     if (rangeError != null)
                         return ResponseEntity.badRequest().body(Map.of("error", rangeError));
                 }
 
                 SalesDriving d = new SalesDriving();
-                saveDriving(d, body, auth.getName(), date);
+                saveDriving(d, body, viewAs.who(auth), date);
                 var saved = drivingRepository.save(d);
                 lastSavedId = saved.getId();
             }
@@ -338,41 +340,41 @@ public class SalesFormController {
     }
 
     @PutMapping("/driving/{id}")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> updateDriving(@PathVariable Long id,
                                            @RequestBody Map<String, Object> body,
                                            Authentication auth) {
         try {
             SalesDriving d = drivingRepository.findById(id).orElseThrow();
-            if (!d.getSalesUsername().equals(auth.getName()))
+            if (!d.getSalesUsername().equals(viewAs.who(auth)))
                 return ResponseEntity.status(403).body(Map.of("error", "권한 없음"));
 
             LocalDate date = LocalDate.parse((String) body.getOrDefault("startDate",
                     body.getOrDefault("date", d.getDate().toString())));
 
-            if (isLocked(auth.getName(), date))
+            if (isLocked(viewAs.who(auth), date))
                 return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
 
             Integer newMeter = body.get("meterReading") != null && !body.get("meterReading").toString().isBlank()
                     ? Integer.parseInt(body.get("meterReading").toString()) : null;
-            String rangeError = validateMeterRange(auth.getName(), date, newMeter, d.getId());
+            String rangeError = validateMeterRange(viewAs.who(auth), date, newMeter, d.getId());
             if (rangeError != null)
                 return ResponseEntity.badRequest().body(Map.of("error", rangeError));
 
-            saveDriving(d, body, auth.getName(), date);
+            saveDriving(d, body, viewAs.who(auth), date);
             drivingRepository.save(d);
             return ResponseEntity.ok(Map.of("message", "수정되었습니다.", "id", d.getId()));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
     @DeleteMapping("/driving/{id}")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> deleteDriving(@PathVariable Long id, Authentication auth) {
         try {
             SalesDriving d = drivingRepository.findById(id).orElseThrow();
-            if (!d.getSalesUsername().equals(auth.getName()))
+            if (!d.getSalesUsername().equals(viewAs.who(auth)))
                 return ResponseEntity.status(403).body(Map.of("error", "권한 없음"));
-            if (isLocked(auth.getName(), d.getDate()))
+            if (isLocked(viewAs.who(auth), d.getDate()))
                 return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
             drivingRepository.deleteById(id);
             return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
@@ -384,55 +386,55 @@ public class SalesFormController {
     // ────────────────────────────────────────
 
     @GetMapping("/receipt")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> getReceipts(@RequestParam Integer year,
                                          @RequestParam Integer month,
                                          Authentication auth) {
         var list = receiptRepository.findBySalesUsernameAndYearAndMonthOrderByDateAsc(
-                auth.getName(), year, month);
+                viewAs.who(auth), year, month);
         return ResponseEntity.ok(list.stream().map(r -> buildReceiptMap(r)).toList());
     }
 
     @PostMapping("/receipt")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> addReceipt(@RequestBody Map<String, Object> body, Authentication auth) {
         LocalDate date = LocalDate.parse((String) body.get("date"));
-        if (isLocked(auth.getName(), date))
+        if (isLocked(viewAs.who(auth), date))
             return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
         try {
             SalesReceipt r = new SalesReceipt();
-            saveReceipt(r, body, auth.getName(), date);
+            saveReceipt(r, body, viewAs.who(auth), date);
             receiptRepository.save(r);
             return ResponseEntity.ok(Map.of("message", "추가되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
     @PutMapping("/receipt/{id}")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> updateReceipt(@PathVariable Long id,
                                            @RequestBody Map<String, Object> body,
                                            Authentication auth) {
         try {
             SalesReceipt r = receiptRepository.findById(id).orElseThrow();
-            if (!r.getSalesUsername().equals(auth.getName()))
+            if (!r.getSalesUsername().equals(viewAs.who(auth)))
                 return ResponseEntity.status(403).body(Map.of("error", "권한 없음"));
             LocalDate date = LocalDate.parse((String) body.get("date"));
-            if (isLocked(auth.getName(), date))
+            if (isLocked(viewAs.who(auth), date))
                 return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
-            saveReceipt(r, body, auth.getName(), date);
+            saveReceipt(r, body, viewAs.who(auth), date);
             receiptRepository.save(r);
             return ResponseEntity.ok(Map.of("message", "수정되었습니다."));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
     @DeleteMapping("/receipt/{id}")
-    @PreAuthorize("@tabPermissionService.hasAccess(authentication, 'sales')")
+    @PreAuthorize("@salesViewAs.allowed(authentication)")
     public ResponseEntity<?> deleteReceipt(@PathVariable Long id, Authentication auth) {
         try {
             SalesReceipt r = receiptRepository.findById(id).orElseThrow();
-            if (!r.getSalesUsername().equals(auth.getName()))
+            if (!r.getSalesUsername().equals(viewAs.who(auth)))
                 return ResponseEntity.status(403).body(Map.of("error", "권한 없음"));
-            if (isLocked(auth.getName(), r.getDate()))
+            if (isLocked(viewAs.who(auth), r.getDate()))
                 return ResponseEntity.badRequest().body(Map.of("error", "잠긴 달입니다."));
             receiptRepository.deleteById(id);
             return ResponseEntity.ok(Map.of("message", "삭제되었습니다."));
