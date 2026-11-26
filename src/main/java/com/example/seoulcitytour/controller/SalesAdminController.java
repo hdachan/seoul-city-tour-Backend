@@ -105,6 +105,7 @@ public class SalesAdminController {
             var startStatus = startMeterService.status(u.getUsername());
             m.put("startMeter",       startStatus.get("startMeter"));
             m.put("startMeterNeeded", startStatus.get("needed"));
+            m.put("currentMeter",     lastMeter > 0 ? lastMeter : null); // 현재(그 달 마지막) 미터기
             m.put("receiptCount", receiptCount);
             m.put("receiptTotal", receiptTotal);
             m.put("receiptPersonal", receiptPersonal);
