@@ -30,4 +30,9 @@ public class SalesMonthLock {
 
     @Column(nullable = false)
     private Boolean locked = false;
+
+    // 관리자가 직접 열거나 잠근 주 (true) → 자정 · 서버 재시작 자동 잠금이 건드리지 않음
+    //   null / false = 자동으로 만든 기록 (이번 주 자동 오픈 등)
+    @Column(name = "admin_set")
+    private Boolean adminSet;
 }

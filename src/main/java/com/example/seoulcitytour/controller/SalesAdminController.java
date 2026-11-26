@@ -194,17 +194,48 @@ public class SalesAdminController {
             Boolean locked        = (Boolean) body.get("locked");
             Integer weekNum       = body.get("weekNum") != null ? (Integer) body.get("weekNum") : 0;
 
-            SalesMonthLock lock = lockRepository
-                    .findBySalesUsernameAndYearAndMonthAndWeekNum(salesUsername, year, month, weekNum)
-                    .orElse(new SalesMonthLock());
-            setField(lock, "salesUsername", salesUsername);
-            setField(lock, "year",    year);
-            setField(lock, "month",   month);
-            setField(lock, "weekNum", weekNum);
-            setField(lock, "locked",  locked);
-            lockRepository.save(lock);
+            saveLock(salesUsername, year, month, weekNum, locked);
             return ResponseEntity.ok(Map.of("locked", locked, "weekNum", weekNum));
         } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+    }
+
+    // 🔓 / 🔒 한꺼번에: 그 달의 모든 주
+    //   salesUsername 있으면 그 사람만, 없으면 영업 사원 전체
+    @Transactional
+    @PostMapping("/lock-bulk")
+    public ResponseEntity<?> bulkLock(@RequestBody Map<String, Object> body) {
+        try {
+            Integer year   = (Integer) body.get("year");
+            Integer month  = (Integer) body.get("month");
+            Boolean locked = (Boolean) body.get("locked");
+            String  one    = (String)  body.get("salesUsername");
+            if (year == null || month == null || locked == null)
+                return ResponseEntity.badRequest().body(Map.of("error", "year · month · locked 가 필요합니다."));
+            var users = userRepository.findByActiveTrueOrderByNameAsc().stream()
+                    .filter(u -> "ROLE_SALES".equals(u.getRole()))
+                    .filter(u -> one == null || one.isBlank() || one.equals(u.getUsername()))
+                    .toList();
+            if (one != null && !one.isBlank() && users.isEmpty())
+                return ResponseEntity.badRequest().body(Map.of("error", "영업 사원이 아닙니다."));
+            var weeks = SalesWeekLockScheduler.getWeeksOfMonth(year, month);
+            for (var u : users)
+                for (var w : weeks) saveLock(u.getUsername(), year, month, w.weekNum(), locked);
+            return ResponseEntity.ok(Map.of("locked", locked, "users", users.size(), "weeks", weeks.size()));
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+    }
+
+    // 관리자가 바꾼 잠금 저장 (adminSet = true → 자동 잠금이 안 건드림)
+    private void saveLock(String salesUsername, Integer year, Integer month, Integer weekNum, Boolean locked) throws Exception {
+        SalesMonthLock lock = lockRepository
+                .findBySalesUsernameAndYearAndMonthAndWeekNum(salesUsername, year, month, weekNum)
+                .orElse(new SalesMonthLock());
+        setField(lock, "salesUsername", salesUsername);
+        setField(lock, "year",     year);
+        setField(lock, "month",    month);
+        setField(lock, "weekNum",  weekNum);
+        setField(lock, "locked",   locked);
+        setField(lock, "adminSet", true);
+        lockRepository.save(lock);
     }
 
     // ── 비고 목록 조회/저장 (관리자) ──

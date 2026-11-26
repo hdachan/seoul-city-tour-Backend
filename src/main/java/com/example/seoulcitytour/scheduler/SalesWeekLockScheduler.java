@@ -55,8 +55,10 @@ public class SalesWeekLockScheduler {
                     SalesMonthLock lock = existing.orElse(new SalesMonthLock());
 
                     if (isPast) {
-                        // 지난 주 → 잠금
-                        if (existing.isEmpty() || !existing.get().getLocked()) {
+                        // 지난 주 → 잠금 (관리자가 직접 연 주는 관리자가 잠글 때까지 그대로)
+                        boolean adminOpened = existing.isPresent()
+                                && Boolean.TRUE.equals(existing.get().getAdminSet());
+                        if (existing.isEmpty() || (!existing.get().getLocked() && !adminOpened)) {
                             setField(lock, "salesUsername", user.getUsername());
                             setField(lock, "year",    year);
                             setField(lock, "month",   month);
